@@ -87,8 +87,10 @@ export async function saniereFoto(base64Jpeg: string, schluessel: string): Promi
       )
     }
     if (antwort.status === 429) {
+      // Googles Originaltext mitgeben: daran erkennt man, WELCHES Limit greift
+      // (steht dort "FreeTier", ist das Projekt noch nicht auf dem bezahlten Tarif).
       throw new GeminiFehler(
-        'Das Kontingent ist gerade ausgeschöpft (zu viele Anfragen). Kurz warten und erneut versuchen.',
+        `Das Kontingent ist gerade ausgeschöpft. Kurz warten und erneut versuchen. ${detail}`.trim(),
         true,
       )
     }
