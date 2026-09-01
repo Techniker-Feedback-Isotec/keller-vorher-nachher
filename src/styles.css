@@ -1,0 +1,546 @@
+/* ISOTEC-Farben (Corporate Design Handbuch 2.0) */
+:root {
+  --red: #d51317;
+  --red-dark: #a90f12;
+  --brown: #564a44;
+  --grey: #e0e0e0;
+  --light: #f4f4f4;
+  --white: #ffffff;
+  --ok: #2e7d32;
+  --warn: #e29100;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--light);
+  color: var(--brown);
+  line-height: 1.45;
+}
+
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* Header: schlicht weiss, bleibt beim Scrollen oben stehen */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--white);
+  border-bottom: 1px solid var(--grey);
+  padding: 12px 0;
+}
+
+.header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--brown);
+  line-height: 1.2;
+}
+
+.header-kicker {
+  margin: 1px 0 0;
+  font-size: 0.8rem;
+  color: #8a7f78;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.header-logo {
+  height: 30px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+}
+
+.header-divider {
+  width: 1px;
+  height: 30px;
+  background: var(--grey);
+  flex-shrink: 0;
+}
+
+@media (max-width: 700px) {
+  .header-divider {
+    display: none;
+  }
+
+  .header h1 {
+    font-size: 1.1rem;
+  }
+}
+
+/* Cards / Sektionen */
+main {
+  padding: 24px 0 8px;
+}
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--grey);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--red);
+  color: var(--white);
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.section-hint {
+  margin: -4px 0 12px;
+  font-size: 0.9rem;
+  color: #7a6f68;
+}
+
+.section-hint a {
+  color: var(--red);
+}
+
+.hinweis-warn {
+  border-left: 4px solid var(--warn);
+  font-size: 0.95rem;
+}
+
+/* Knoepfe und Felder */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 0.92rem;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.btn-rot {
+  background: var(--red);
+  color: var(--white);
+}
+
+.btn-rot:hover {
+  background: var(--red-dark);
+}
+
+.btn-rand {
+  background: var(--white);
+  border: 1px solid var(--grey);
+  color: var(--brown);
+}
+
+.btn-rand:hover {
+  background: var(--light);
+}
+
+.btn-hell {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--brown);
+}
+
+.btn-klein {
+  padding: 5px 10px;
+  font-size: 0.82rem;
+}
+
+.punkt {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.punkt-ok {
+  background: var(--ok);
+}
+
+.punkt-warn {
+  background: var(--warn);
+}
+
+.zeile {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.feld {
+  flex: 1 1 240px;
+  min-width: 0;
+  border: 1px solid var(--grey);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--brown);
+}
+
+.feld:focus {
+  outline: 2px solid var(--red);
+  outline-offset: -1px;
+}
+
+/* Ablagefläche fuer den Upload */
+.ablage {
+  border: 2px dashed var(--grey);
+  border-radius: 10px;
+  padding: 28px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ablage:hover,
+.ablage.zieht {
+  border-color: var(--red);
+  background: #fdf6f6;
+}
+
+.ablage p {
+  margin: 0 0 6px;
+}
+
+.ablage-klein {
+  font-size: 0.85rem;
+  color: #7a6f68;
+  max-width: 560px;
+  margin: 0 auto !important;
+}
+
+/* Galerie */
+.galerie {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.kachel {
+  margin: 0;
+  border: 1px solid var(--grey);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--light);
+}
+
+.kachel.klickbar {
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.kachel.klickbar:hover {
+  box-shadow: 0 4px 14px rgba(86, 74, 68, 0.25);
+  transform: translateY(-2px);
+}
+
+.kachel-bild {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--grey);
+}
+
+.kachel-bild img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.kachel-teiler {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: var(--white);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.kachel-schleier {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(86, 74, 68, 0.55);
+  color: var(--white);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 10px;
+}
+
+.kachel-fehler {
+  background: rgba(120, 20, 22, 0.75);
+}
+
+.dreher {
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-top-color: var(--white);
+  border-radius: 50%;
+  animation: drehen 0.9s linear infinite;
+}
+
+@keyframes drehen {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.kachel figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 10px;
+  background: var(--white);
+  font-size: 0.83rem;
+}
+
+.kachel-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kachel-entfernen {
+  border: none;
+  background: none;
+  color: #a0958d;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.kachel-entfernen:hover {
+  color: var(--red);
+}
+
+.rechts-hinweis {
+  margin: 14px 0 0;
+  font-size: 0.8rem;
+  color: #8a7f78;
+}
+
+.fusszeile {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #8a7f78;
+  padding: 12px 16px 24px;
+}
+
+/* Grossansicht mit Schieberegler */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #1c1715;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  color: var(--white);
+}
+
+.viewer-titel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.viewer-titel strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-titel span {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.viewer-knoepfe {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.viewer-zu {
+  font-size: 1rem;
+  padding: 9px 12px;
+}
+
+.viewer-mitte {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0 8px;
+  gap: 6px;
+}
+
+.viewer-pfeil {
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--white);
+  font-size: 1.9rem;
+  line-height: 1;
+  width: 44px;
+  height: 64px;
+  border-radius: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.viewer-pfeil:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.vergleich {
+  position: relative;
+  max-width: min(1400px, 100%);
+  max-height: 100%;
+  touch-action: none;
+  user-select: none;
+  cursor: ew-resize;
+  line-height: 0;
+}
+
+.vergleich-bild {
+  max-width: 100%;
+  max-height: calc(100vh - 150px);
+  display: block;
+  border-radius: 6px;
+}
+
+.vergleich-nachher {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vergleich-marke {
+  position: absolute;
+  top: 10px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(28, 23, 21, 0.65);
+  color: var(--white);
+  font-size: 0.8rem;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.vergleich-marke.links-oben {
+  left: 10px;
+}
+
+.vergleich-marke.rechts-oben {
+  right: 10px;
+}
+
+.vergleich-linie {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--white);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.vergleich-griff {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--brown);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.viewer-hinweis {
+  margin: 0;
+  padding: 10px 16px 14px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 700px) {
+  .viewer-pfeil {
+    display: none;
+  }
+
+  .vergleich-bild {
+    max-height: calc(100vh - 170px);
+  }
+}
