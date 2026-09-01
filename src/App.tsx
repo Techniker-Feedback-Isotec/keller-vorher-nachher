@@ -61,9 +61,13 @@ export default function App() {
 
   useEffect(() => {
     const demo = window.location.hash.includes('demo')
+    // Die Einstellungen stehen absichtlich nicht in der Oberfläche: Im Einsatz
+    // soll niemand am Schlüssel drehen. Erreichbar nur über #einstellungen.
+    const einstellungen = window.location.hash.includes('einstellungen')
     const wert = uebernimmSchluesselAusLink() || leseSchluessel()
     setSchluessel(wert)
     setSchluesselEntwurf(wert)
+    if (einstellungen) setEinstellungenOffen(true)
     if (demo && !demoGeladen) {
       demoGeladen = true
       void (async () => {
@@ -211,29 +215,17 @@ export default function App() {
               <p className="header-kicker">Sanierungsvorschau mit KI</p>
             </div>
           </div>
-          <button
-            className="btn btn-rand"
-            onClick={() => {
-              setSchluesselEntwurf(schluessel)
-              setEinstellungenOffen((o) => !o)
-            }}
-          >
-            <span className={schluessel ? 'punkt punkt-ok' : 'punkt punkt-warn'} />
-            Einstellungen
-          </button>
         </div>
       </header>
 
       <main className="container">
         {einstellungenOffen && (
           <section className="card">
-            <h2>Einstellungen</h2>
+            <h2>Einstellungen (nur Verwaltung)</h2>
             <p className="section-hint">
-              Das Tool braucht einen Google-Gemini-API-Schlüssel (einmal je Gerät). Anlegen unter{' '}
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
-                aistudio.google.com/apikey
-              </a>
-              . Kosten: etwa 4 Cent je Foto. Der Schlüssel bleibt auf diesem Gerät gespeichert.
+              Diese Seite ist absichtlich nicht verlinkt und nur über <code>#einstellungen</code> in
+              der Adresse erreichbar. Der Gemini-Schlüssel bleibt auf diesem Gerät gespeichert.
+              Kosten: etwa 4 Cent je Foto.
             </p>
             <div className="zeile">
               <input
@@ -252,11 +244,13 @@ export default function App() {
             </div>
             {schluessel && (
               <p className="section-hint" style={{ marginTop: 12 }}>
-                Für die Kollegen:{' '}
+                Einrichtungslink für die Kollegen:{' '}
                 <button className="btn btn-rand btn-klein" onClick={kopiereVerteilLink}>
                   {linkKopiert ? '✓ Link kopiert' : 'Link mit Schlüssel kopieren'}
                 </button>{' '}
-                Wer den Link einmal öffnet, hat den Schlüssel automatisch hinterlegt.
+                Wer ihn einmal öffnet, hat den Schlüssel hinterlegt. Den Link aufbewahren: Sollte
+                ein Gerät den Schlüssel verlieren (gelöschte Browserdaten, neues Handy), genügt es,
+                ihn erneut zu öffnen.
               </p>
             )}
           </section>
@@ -264,9 +258,9 @@ export default function App() {
 
         {!schluessel && !einstellungenOffen && (
           <section className="card hinweis-warn">
-            Es ist noch kein API-Schlüssel hinterlegt. Fotos können hochgeladen werden, die
-            Bearbeitung startet aber erst, wenn unter <strong>Einstellungen</strong> ein
-            Gemini-Schlüssel gespeichert ist.
+            Dieses Gerät ist noch nicht eingerichtet. Bitte den Einrichtungslink von Yann öffnen,
+            danach läuft alles automatisch. Fotos lassen sich schon auswählen, die Bearbeitung
+            startet aber erst danach.
           </section>
         )}
 
