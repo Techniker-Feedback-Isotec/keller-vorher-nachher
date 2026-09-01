@@ -1,6 +1,6 @@
 {
-  "name": "Keller Vorher-Nachher – Abdichtungstechnik Dipl.-Ing. Morscheck GmbH",
-  "short_name": "Vorher-Nachher",
+  "name": "ISOTEC-Sanierungsvorschau – Abdichtungstechnik Dipl.-Ing. Morscheck GmbH",
+  "short_name": "Sanierungsvorschau",
   "description": "Kellerfotos per KI als saniert visualisieren und im Vorher-Nachher-Vergleich zeigen",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },

@@ -211,8 +211,8 @@ export default function App() {
             <img className="header-logo" src={logo} alt="ISOTEC" />
             <div className="header-divider" />
             <div>
-              <h1>Keller Vorher-Nachher</h1>
-              <p className="header-kicker">Sanierungsvorschau mit KI</p>
+              <h1>ISOTEC-Sanierungsvorschau</h1>
+              <p className="header-kicker">Vorher-Nachher aus dem Kellerfoto</p>
             </div>
           </div>
         </div>
