@@ -87,8 +87,18 @@ export async function saniereFoto(base64Jpeg: string, schluessel: string): Promi
       )
     }
     if (antwort.status === 429) {
-      // Googles Originaltext mitgeben: daran erkennt man, WELCHES Limit greift
-      // (steht dort "FreeTier", ist das Projekt noch nicht auf dem bezahlten Tarif).
+      // Zwei sehr unterschiedliche Faelle kommen beide als 429:
+      // 1. Kein Prepaid-Guthaben im Projekt. Dann ist jedes Kontingent 0 und
+      //    Warten hilft nie – Guthaben muss in AI Studio aufgeladen werden.
+      // 2. Echte Drosselung, weil gerade zu viele Anfragen laufen.
+      const ohneGuthaben =
+        /prepayment credits|free_tier_requests, limit: 0|billing details/i.test(detail)
+      if (ohneGuthaben) {
+        throw new GeminiFehler(
+          'Für dieses Google-Projekt ist kein Guthaben vorhanden. Unter aistudio.google.com/billing Guthaben aufladen ("Buy credits", ab 10 $), danach erneut versuchen.',
+          false,
+        )
+      }
       throw new GeminiFehler(
         `Das Kontingent ist gerade ausgeschöpft. Kurz warten und erneut versuchen. ${detail}`.trim(),
         true,
