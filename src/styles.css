@@ -28,7 +28,7 @@ body {
 }
 
 .container {
-  max-width: 980px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 16px;
 }
@@ -252,11 +252,99 @@ main {
   margin: 0 auto !important;
 }
 
+/* Übersicht: links die Auswahl, rechts der Vergleich */
+.uebersicht {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .uebersicht {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Galerie */
 .galerie {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .galerie {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    max-height: none;
+  }
+
+  /* Gestapelt gehört der Vergleich nach oben und bleibt beim Blättern durch
+     die Kacheln stehen, sonst müsste man nach jedem Antippen hochscrollen. */
+  .vergleich-fenster {
+    order: -1;
+    --vergleich-hoehe: 46vh;
+  }
+}
+
+/* Vergleichsfenster auf der Seite */
+.vergleich-fenster {
+  /* Kellerfotos kommen meist hochkant vom Handy; dort begrenzt die Höhe die
+     Größe, deshalb bewusst großzügig. */
+  --vergleich-hoehe: 76vh;
+  background: var(--light);
+  border: 1px solid var(--grey);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 76px;
+  /* Muss über den Kacheln liegen: gestapelt steht das Fenster per order:-1
+     vorn, wird dadurch aber zuerst gezeichnet und sonst von den Kacheln
+     überdeckt, sobald sie darunter durchscrollen. */
+  z-index: 2;
+}
+
+.fenster-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.fenster-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fenster-knoepfe {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.fenster-hinweis {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #8a7f78;
+  text-align: center;
+}
+
+.fenster-leer {
+  margin: 0;
+  padding: 60px 20px;
+  text-align: center;
+  color: #8a7f78;
+  font-size: 0.9rem;
 }
 
 .kachel {
@@ -275,6 +363,13 @@ main {
 .kachel.klickbar:hover {
   box-shadow: 0 4px 14px rgba(86, 74, 68, 0.25);
   transform: translateY(-2px);
+}
+
+/* Das im Fenster gezeigte Foto: Auswahl über die Rahmenfarbe, nicht über einen
+   harten Kasten. */
+.kachel.gewaehlt {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red);
 }
 
 .kachel-bild {
@@ -463,9 +558,10 @@ main {
   line-height: 0;
 }
 
+/* Die Höhe kommt vom jeweiligen Rahmen (Fenster auf der Seite oder Vollbild). */
 .vergleich-bild {
   max-width: 100%;
-  max-height: calc(100vh - 150px);
+  max-height: var(--vergleich-hoehe, calc(100vh - 150px));
   display: block;
   border-radius: 6px;
 }

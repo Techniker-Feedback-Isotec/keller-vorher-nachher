@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import logo from './assets/isotec-logo.png'
+import Vergleich from './Vergleich'
 import Viewer, { type ViewerFoto } from './Viewer'
+import { sichereNachherBild, teilenMoeglich } from './lib/share'
 import { bereiteBildVor, blobZuBase64 } from './lib/bild'
 import { GeminiFehler, saniereFoto } from './lib/gemini'
 import {
@@ -49,6 +51,8 @@ export default function App() {
   const [einstellungenOffen, setEinstellungenOffen] = useState(false)
   const [schluesselEntwurf, setSchluesselEntwurf] = useState('')
   const [linkKopiert, setLinkKopiert] = useState(false)
+  const [auswahlId, setAuswahlId] = useState<string | null>(null)
+  const [gesichert, setGesichert] = useState(false)
   const [zeigeIndex, setZeigeIndex] = useState<number | null>(null)
   const [ziehtDatei, setZiehtDatei] = useState(false)
   const dateiFeld = useRef<HTMLInputElement>(null)
@@ -64,19 +68,22 @@ export default function App() {
       demoGeladen = true
       void (async () => {
         const { demoBilder } = await import('./lib/demo')
-        const { vorher, nachher } = await demoBilder()
-        setFotos((liste) => [
-          ...liste,
-          {
-            id: `demo-${naechsteId++}`,
-            name: 'Beispiel Kellerwand',
-            vorherUrl: URL.createObjectURL(vorher),
-            vorherBlob: vorher,
-            nachherUrl: URL.createObjectURL(nachher),
-            nachherBlob: nachher,
-            status: 'fertig',
-          },
-        ])
+        const namen = ['Beispiel Waschküche', 'Beispiel Kellerflur', 'Beispiel Heizungsraum']
+        for (const [nummer, name] of namen.entries()) {
+          const { vorher, nachher } = await demoBilder(nummer)
+          setFotos((liste) => [
+            ...liste,
+            {
+              id: `demo-${naechsteId++}`,
+              name,
+              vorherUrl: URL.createObjectURL(vorher),
+              vorherBlob: vorher,
+              nachherUrl: URL.createObjectURL(nachher),
+              nachherBlob: nachher,
+              status: 'fertig',
+            },
+          ])
+        }
       })()
     }
   }, [])
@@ -180,6 +187,17 @@ export default function App() {
       nachherUrl: f.nachherUrl!,
       nachherBlob: f.nachherBlob!,
     }))
+
+  // Immer ein Foto im Vergleichsfenster zeigen: das zuletzt gewaehlte, sonst
+  // das erste fertige. Wird das gewaehlte entfernt, rueckt automatisch nach.
+  const gewaehlt = fertige.find((f) => f.id === auswahlId) ?? fertige[0]
+  useEffect(() => {
+    if (gewaehlt && gewaehlt.id !== auswahlId) setAuswahlId(gewaehlt.id)
+    if (!gewaehlt && auswahlId) setAuswahlId(null)
+  }, [gewaehlt, auswahlId])
+  useEffect(() => {
+    setGesichert(false)
+  }, [gewaehlt?.id])
 
   return (
     <>
@@ -295,20 +313,24 @@ export default function App() {
         {fotos.length > 0 && (
           <section className="card">
             <h2>
-              <span className="step">2</span>Übersicht
+              <span className="step">2</span>Vorher-Nachher
             </h2>
             <p className="section-hint">
-              Fertige Fotos antippen für den großen Vorher-Nachher-Vergleich.
+              Foto in der Übersicht antippen, rechts erscheint der Vergleich.
             </p>
+            <div className="uebersicht">
             <div className="galerie">
               {fotos.map((foto) => {
-                const fertigIndex = fertige.findIndex((f) => f.id === foto.id)
+                const istGewaehlt = gewaehlt?.id === foto.id
+                const klassen = ['kachel']
+                if (foto.status === 'fertig') klassen.push('klickbar')
+                if (istGewaehlt) klassen.push('gewaehlt')
                 return (
                   <figure
                     key={foto.id}
-                    className={foto.status === 'fertig' ? 'kachel klickbar' : 'kachel'}
+                    className={klassen.join(' ')}
                     onClick={() => {
-                      if (fertigIndex >= 0) setZeigeIndex(fertigIndex)
+                      if (foto.status === 'fertig') setAuswahlId(foto.id)
                     }}
                   >
                     <div className="kachel-bild">
@@ -366,6 +388,56 @@ export default function App() {
                 )
               })}
             </div>
+
+            <div className="vergleich-fenster">
+              {gewaehlt ? (
+                <>
+                  <div className="fenster-kopf">
+                    <strong className="fenster-name" title={gewaehlt.name}>
+                      {gewaehlt.name}
+                    </strong>
+                    <div className="fenster-knoepfe">
+                      <button
+                        className="btn btn-rand btn-klein"
+                        onClick={async () => {
+                          if (await sichereNachherBild(gewaehlt.nachherBlob, gewaehlt.name)) {
+                            setGesichert(true)
+                          }
+                        }}
+                      >
+                        {gesichert
+                          ? '✓ Gesichert'
+                          : teilenMoeglich()
+                            ? 'In Fotos sichern'
+                            : 'Nachher speichern'}
+                      </button>
+                      <button
+                        className="btn btn-rand btn-klein"
+                        onClick={() =>
+                          setZeigeIndex(fertige.findIndex((f) => f.id === gewaehlt.id))
+                        }
+                      >
+                        Vollbild
+                      </button>
+                    </div>
+                  </div>
+                  <Vergleich
+                    vorherUrl={gewaehlt.vorherUrl}
+                    nachherUrl={gewaehlt.nachherUrl}
+                    zuruecksetzenBei={gewaehlt.id}
+                  />
+                  <p className="fenster-hinweis">
+                    Regler ziehen: links mehr Nachher, rechts mehr Vorher
+                  </p>
+                </>
+              ) : (
+                <p className="fenster-leer">
+                  Sobald ein Foto fertig bearbeitet ist, erscheint hier der Vergleich.
+                </p>
+              )}
+            </div>
+            </div>
+
             <p className="rechts-hinweis">
               Die Nachher-Bilder sind KI-Visualisierungen zur Veranschaulichung, kein zugesichertes
               Sanierungsergebnis.

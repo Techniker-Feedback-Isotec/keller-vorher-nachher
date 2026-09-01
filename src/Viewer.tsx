@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { speichereDatei, teileDateien, teilenMoeglich } from './lib/share'
+import { useEffect, useState } from 'react'
+import Vergleich from './Vergleich'
+import { sichereNachherBild, teilenMoeglich } from './lib/share'
 
 export type ViewerFoto = {
   id: string
@@ -17,29 +18,16 @@ type Props = {
 }
 
 /**
- * Grossansicht mit Schieberegler: links das alte Foto (Vorher), rechts das
- * sanierte (Nachher). Zieht man den Griff nach links, sieht man mehr vom
- * Nachher-Bild, nach rechts mehr vom Vorher-Bild.
+ * Vollbildansicht für den Kundentermin: dieselbe Vergleichsfläche wie auf der
+ * Seite, nur ohne alles drumherum.
  */
 export default function Viewer({ fotos, index, onIndex, onClose }: Props) {
   const foto = fotos[index]
-  const [position, setPosition] = useState(50)
   const [gesichert, setGesichert] = useState(false)
-  const flaeche = useRef<HTMLDivElement>(null)
-  const zieht = useRef(false)
 
-  // Beim Fotowechsel zurueck in die Mitte.
   useEffect(() => {
-    setPosition(50)
     setGesichert(false)
   }, [foto?.id])
-
-  const setzeAusEreignis = useCallback((clientX: number) => {
-    const rect = flaeche.current?.getBoundingClientRect()
-    if (!rect || rect.width === 0) return
-    const anteil = ((clientX - rect.left) / rect.width) * 100
-    setPosition(Math.max(0, Math.min(100, anteil)))
-  }, [])
 
   useEffect(() => {
     const taste = (e: KeyboardEvent) => {
@@ -53,19 +41,6 @@ export default function Viewer({ fotos, index, onIndex, onClose }: Props) {
 
   if (!foto) return null
 
-  async function sichern() {
-    const endung = foto.nachherBlob.type.includes('png') ? 'png' : 'jpg'
-    const dateiname = `ISOTEC_Nachher_${foto.name.replace(/[^\wäöüÄÖÜß. -]+/g, '')}.${endung}`
-    const file = new File([foto.nachherBlob], dateiname, { type: foto.nachherBlob.type })
-    if (teilenMoeglich()) {
-      const ergebnis = await teileDateien([file], 'Nachher-Bild')
-      if (ergebnis === 'geteilt') setGesichert(true)
-      if (ergebnis !== 'nicht moeglich') return
-    }
-    speichereDatei(foto.nachherBlob, dateiname)
-    setGesichert(true)
-  }
-
   return (
     <div className="viewer" role="dialog" aria-label="Vorher-Nachher-Vergleich">
       <div className="viewer-kopf">
@@ -76,7 +51,12 @@ export default function Viewer({ fotos, index, onIndex, onClose }: Props) {
           </span>
         </div>
         <div className="viewer-knoepfe">
-          <button className="btn btn-hell" onClick={sichern}>
+          <button
+            className="btn btn-hell"
+            onClick={async () => {
+              if (await sichereNachherBild(foto.nachherBlob, foto.name)) setGesichert(true)
+            }}
+          >
             {gesichert ? '✓ Gesichert' : teilenMoeglich() ? 'In Fotos sichern' : 'Nachher speichern'}
           </button>
           <button className="btn btn-hell viewer-zu" onClick={onClose} aria-label="Schließen">
@@ -87,46 +67,15 @@ export default function Viewer({ fotos, index, onIndex, onClose }: Props) {
 
       <div className="viewer-mitte">
         {index > 0 && (
-          <button className="viewer-pfeil links" onClick={() => onIndex(index - 1)} aria-label="Vorheriges Foto">
+          <button className="viewer-pfeil" onClick={() => onIndex(index - 1)} aria-label="Vorheriges Foto">
             ‹
           </button>
         )}
 
-        <div
-          ref={flaeche}
-          className="vergleich"
-          onPointerDown={(e) => {
-            zieht.current = true
-            ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
-            setzeAusEreignis(e.clientX)
-          }}
-          onPointerMove={(e) => {
-            if (zieht.current) setzeAusEreignis(e.clientX)
-          }}
-          onPointerUp={() => {
-            zieht.current = false
-          }}
-          onPointerCancel={() => {
-            zieht.current = false
-          }}
-        >
-          <img className="vergleich-bild" src={foto.vorherUrl} alt="Vorher" draggable={false} />
-          <img
-            className="vergleich-bild vergleich-nachher"
-            src={foto.nachherUrl}
-            alt="Nachher"
-            draggable={false}
-            style={{ clipPath: `inset(0 0 0 ${position}%)` }}
-          />
-          <span className="vergleich-marke links-oben">Vorher</span>
-          <span className="vergleich-marke rechts-oben">Nachher</span>
-          <div className="vergleich-linie" style={{ left: `${position}%` }}>
-            <div className="vergleich-griff">⇄</div>
-          </div>
-        </div>
+        <Vergleich vorherUrl={foto.vorherUrl} nachherUrl={foto.nachherUrl} zuruecksetzenBei={foto.id} />
 
         {index < fotos.length - 1 && (
-          <button className="viewer-pfeil rechts" onClick={() => onIndex(index + 1)} aria-label="Nächstes Foto">
+          <button className="viewer-pfeil" onClick={() => onIndex(index + 1)} aria-label="Nächstes Foto">
             ›
           </button>
         )}

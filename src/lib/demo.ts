@@ -6,24 +6,26 @@
  * Grossansicht sofort ausprobieren lassen.
  */
 
-function male(nachher: boolean): Promise<Blob> {
-  const b = 1200
-  const h = 900
+function male(nachher: boolean, variante = 0): Promise<Blob> {
+  const hochkant = variante % 2 === 1
+  const b = hochkant ? 900 : 1200
+  const h = hochkant ? 1200 : 900
   const canvas = document.createElement('canvas')
   canvas.width = b
   canvas.height = h
   const ctx = canvas.getContext('2d')!
 
-  // Wand
-  ctx.fillStyle = nachher ? '#f2efe9' : '#9d8f7f'
+  // Wand, je Variante leicht anderer Ton, damit sich die Beispiele unterscheiden
+  const toene = ['#9d8f7f', '#8f8578', '#a2917d']
+  ctx.fillStyle = nachher ? '#f2efe9' : toene[variante % toene.length]
   ctx.fillRect(0, 0, b, h)
 
   if (!nachher) {
     // Feuchteflecken und Ausbluehungen
     for (let i = 0; i < 26; i++) {
-      const x = ((i * 197) % b) + 20
-      const y = ((i * 131) % (h - 320)) + 40
-      const r = 40 + ((i * 53) % 110)
+      const x = ((i * 197 + variante * 89) % b) + 20
+      const y = ((i * 131 + variante * 57) % (h - 320)) + 40
+      const r = 40 + ((i * 53 + variante * 31) % 110)
       const grad = ctx.createRadialGradient(x, y, 4, x, y, r)
       grad.addColorStop(0, 'rgba(70, 55, 40, 0.55)')
       grad.addColorStop(1, 'rgba(70, 55, 40, 0)')
@@ -66,6 +68,6 @@ function male(nachher: boolean): Promise<Blob> {
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.9))
 }
 
-export async function demoBilder(): Promise<{ vorher: Blob; nachher: Blob }> {
-  return { vorher: await male(false), nachher: await male(true) }
+export async function demoBilder(variante = 0): Promise<{ vorher: Blob; nachher: Blob }> {
+  return { vorher: await male(false, variante), nachher: await male(true, variante) }
 }
