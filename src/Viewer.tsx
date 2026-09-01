@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Vergleich from './Vergleich'
-import { sichereNachherBild, teilenMoeglich } from './lib/share'
+import { ladeNachherHerunter, teileNachherBild, teilenMoeglich } from './lib/share'
 
 export type ViewerFoto = {
   id: string
@@ -53,12 +53,21 @@ export default function Viewer({ fotos, index, onIndex, onClose }: Props) {
         <div className="viewer-knoepfe">
           <button
             className="btn btn-hell"
-            onClick={async () => {
-              if (await sichereNachherBild(foto.nachherBlob, foto.name)) setGesichert(true)
+            onClick={() => {
+              ladeNachherHerunter(foto.nachherBlob, foto.name)
+              setGesichert(true)
             }}
           >
-            {gesichert ? '✓ Gesichert' : teilenMoeglich() ? 'In Fotos sichern' : 'Nachher speichern'}
+            {gesichert ? '✓ Heruntergeladen' : 'Herunterladen'}
           </button>
+          {teilenMoeglich() && (
+            <button
+              className="btn btn-hell"
+              onClick={() => void teileNachherBild(foto.nachherBlob, foto.name)}
+            >
+              In Fotos sichern
+            </button>
+          )}
           <button className="btn btn-hell viewer-zu" onClick={onClose} aria-label="Schließen">
             ✕
           </button>

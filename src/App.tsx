@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import logo from './assets/isotec-logo.png'
 import Vergleich from './Vergleich'
 import Viewer, { type ViewerFoto } from './Viewer'
-import { sichereNachherBild, teilenMoeglich } from './lib/share'
+import { ladeNachherHerunter, teileNachherBild, teilenMoeglich } from './lib/share'
 import { bereiteBildVor, blobZuBase64 } from './lib/bild'
 import { GeminiFehler, saniereFoto } from './lib/gemini'
 import {
@@ -393,18 +393,21 @@ export default function App() {
                     <div className="fenster-knoepfe">
                       <button
                         className="btn btn-rand btn-klein"
-                        onClick={async () => {
-                          if (await sichereNachherBild(gewaehlt.nachherBlob, gewaehlt.name)) {
-                            setGesichert(true)
-                          }
+                        onClick={() => {
+                          ladeNachherHerunter(gewaehlt.nachherBlob, gewaehlt.name)
+                          setGesichert(true)
                         }}
                       >
-                        {gesichert
-                          ? '✓ Gesichert'
-                          : teilenMoeglich()
-                            ? 'In Fotos sichern'
-                            : 'Nachher speichern'}
+                        {gesichert ? '✓ Heruntergeladen' : 'Herunterladen'}
                       </button>
+                      {teilenMoeglich() && (
+                        <button
+                          className="btn btn-rand btn-klein"
+                          onClick={() => void teileNachherBild(gewaehlt.nachherBlob, gewaehlt.name)}
+                        >
+                          In Fotos sichern
+                        </button>
+                      )}
                       <button
                         className="btn btn-rand btn-klein"
                         onClick={() =>
