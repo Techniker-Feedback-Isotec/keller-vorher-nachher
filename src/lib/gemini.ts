@@ -10,16 +10,22 @@ const MODELL = 'gemini-2.5-flash-image'
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODELL}:generateContent`
 
 /**
- * Der Arbeitsauftrag an das Modell. Bewusst eng gefasst: Perspektive, Boden
- * und Gegenstaende bleiben, nur Waende und Decke werden saniert dargestellt.
+ * Der Arbeitsauftrag an das Modell, abgeleitet aus Yanns Beispielpaar vom
+ * 01.09.2026 (Waschkueche): Waende UND Decke saniert, Boden als sauberer
+ * Estrich, Geruempel und alte Aufputz-Leitungen weg, Geraete und Armaturen
+ * bleiben.
  */
 const PROMPT = [
   'Bearbeite dieses Foto eines Kellers.',
-  'Zeige exakt denselben Raum nach einer professionellen Kellersanierung:',
-  'Alle Wände und die Decke sind frisch verputzt mit glattem, hellem Sanierputz und deckend weiß gestrichen.',
-  'Entferne sämtliche Feuchtigkeitsschäden, Schimmel, Stockflecken, Salzausblühungen, abblätternde Farbe, Risse, dunkle Flecken und Verschmutzungen an Wänden und Decke.',
-  'Der Raum wirkt hell, trocken und sauber.',
-  'Behalte exakt dieselbe Kameraperspektive und Raumgeometrie bei, ebenso Boden, Fenster, Türen, Treppen, Rohre, Leitungen, Zähler und alle Gegenstände im Raum.',
+  'Zeige exakt denselben Raum nach einer professionellen Kellersanierung, nach diesem Schema:',
+  'Alle Wände und die Decke sind frisch verputzt mit glattem Sanierputz und deckend weiß gestrichen;',
+  'sämtliche Feuchtigkeitsschäden, Schimmel, Stockflecken, Salzausblühungen, abblätternde Farbe, Risse und dunkle Flecken sind verschwunden.',
+  'Der Boden ist ein sauberer, ebener, hellgrauer Estrich ohne Flecken, Ausblühungen und Schutt.',
+  'Lose herumstehende Gegenstände wie Eimer, Flaschen, Kartons, Holzreste und Gerümpel sind weggeräumt.',
+  'Alte, auf der Wand oder unter der Decke verlegte Rohre und Kabel sind entfernt, sofern sie nicht zu einem Gerät im Raum gehören.',
+  'Fest installierte Dinge bleiben unverändert erhalten: Geräte wie Waschmaschinen samt Schläuchen, Wasseranschlüsse und Armaturen, Türen, Fenster, Treppen, Bodenabläufe, Lichtschalter und Steckdosen.',
+  'Behalte exakt dieselbe Kameraperspektive und Raumgeometrie bei.',
+  'Der Raum wirkt hell, trocken und sauber, mit neutraler heller Ausleuchtung.',
   'Das Ergebnis muss wie ein echtes, unbearbeitetes Foto desselben Raums aussehen.',
   'Kein Text, kein Wasserzeichen.',
 ].join(' ')
