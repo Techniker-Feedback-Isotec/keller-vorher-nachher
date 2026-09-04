@@ -10,25 +10,43 @@ const MODELL = 'gemini-2.5-flash-image'
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODELL}:generateContent`
 
 /**
- * Der Arbeitsauftrag an das Modell, abgeleitet aus Yanns Beispielpaar vom
- * 01.09.2026 (Waschkueche): Waende UND Decke saniert, Boden als sauberer
- * Estrich, Geruempel und alte Aufputz-Leitungen weg, Geraete und Armaturen
- * bleiben.
+ * Der Arbeitsauftrag an das Modell. Grundlage ist Yanns Beispielpaar vom
+ * 01.09.2026 (Waschkueche), am 04.09.2026 um seine Regeln fuer Boeden und
+ * Waende ergaenzt: Fliesenboden behaelt seine Fliesen bis auf einen ca. 30 cm
+ * breiten grauen Streifen entlang der Waende (dort ist die Abdichtung
+ * sichtbar), einfarbiger Boden wird nur leicht aufgehellt; Waende werden
+ * glatte weisse Flaechen ohne Steinmuster, Verkleidungen wie Rigips oder
+ * Holzvertaefelung verschwinden. Absaetze und Ueberschriften im Text helfen
+ * dem Modell, die Regeln je Bauteil auseinanderzuhalten.
  */
 const PROMPT = [
   'Bearbeite dieses Foto eines Kellers.',
-  'Zeige exakt denselben Raum nach einer professionellen Kellersanierung, nach diesem Schema:',
-  'Alle Wände und die Decke sind frisch verputzt mit glattem Sanierputz und deckend weiß gestrichen;',
-  'sämtliche Feuchtigkeitsschäden, Schimmel, Stockflecken, Salzausblühungen, abblätternde Farbe, Risse und dunkle Flecken sind verschwunden.',
-  'Der Boden ist ein sauberer, ebener, hellgrauer Estrich ohne Flecken, Ausblühungen und Schutt.',
+  'Zeige exakt denselben Raum nach einer professionellen Kellersanierung. Halte dich genau an diese Regeln:',
+  '',
+  'WÄNDE:',
+  'Jede Wandfläche wird zu einer vollkommen ebenen, glatten, deckend weiß gestrichenen Fläche.',
+  'Es darf kein Mauerwerk, kein Stein-, Ziegel- oder Fugenmuster und keine Struktur mehr zu erkennen sein, die Wand ist frisch verputzt und weiß.',
+  'Sind Wände mit Rigips, Gipskartonplatten, Holzvertäfelung, Paneelen, Regalen an der Wand oder ähnlichen Verkleidungen bedeckt: Entferne diese Verkleidungen vollständig und zeige auch dort eine glatte, weiß gestrichene Wand.',
+  'Sämtliche Feuchtigkeitsschäden, Schimmel, Stockflecken, Salzausblühungen, abblätternde Farbe, Risse und dunkle Flecken sind verschwunden.',
+  '',
+  'DECKE:',
+  'Die Decke ist glatt verputzt und weiß gestrichen, ohne Flecken und Schäden.',
+  '',
+  'BODEN:',
+  'Wenn der Boden gefliest ist: Entlang aller Wände verläuft ein etwa 30 Zentimeter breiter Streifen, in dem die Fliesen entfernt sind und ein glatter, grauer Untergrund (Estrich) sichtbar ist. Die übrigen Fliesen bleiben exakt so, wie sie auf dem Foto sind, in Farbe, Muster und Zustand.',
+  'Wenn der Boden nicht gefliest, sondern einfarbig ist (Estrich, Beton, Anstrich): Helle den Boden leicht auf und verbessere ihn nur minimal, gleichmäßiger und sauberer, aber deutlich als derselbe Boden erkennbar.',
+  '',
+  'GEGENSTÄNDE UND LEITUNGEN:',
   'Lose herumstehende Gegenstände wie Eimer, Flaschen, Kartons, Holzreste und Gerümpel sind weggeräumt.',
   'Alte, auf der Wand oder unter der Decke verlegte Rohre und Kabel sind entfernt, sofern sie nicht zu einem Gerät im Raum gehören.',
-  'Fest installierte Dinge bleiben unverändert erhalten: Geräte wie Waschmaschinen samt Schläuchen, Wasseranschlüsse und Armaturen, Türen, Fenster, Treppen, Bodenabläufe, Lichtschalter und Steckdosen.',
+  'Fest installierte Dinge bleiben unverändert erhalten: Geräte wie Waschmaschinen und Heizungen samt Schläuchen, Wasseranschlüsse und Armaturen, Türen, Fenster, Treppen, Bodenabläufe, Lichtschalter und Steckdosen.',
+  '',
+  'ALLGEMEIN:',
   'Behalte exakt dieselbe Kameraperspektive und Raumgeometrie bei.',
   'Der Raum wirkt hell, trocken und sauber, mit neutraler heller Ausleuchtung.',
   'Das Ergebnis muss wie ein echtes, unbearbeitetes Foto desselben Raums aussehen.',
   'Kein Text, kein Wasserzeichen.',
-].join(' ')
+].join('\n')
 
 export class GeminiFehler extends Error {
   /** true, wenn ein weiterer Versuch ohne Aenderung sinnvoll sein kann. */
