@@ -35,6 +35,11 @@ jobs:
         run: npm run build
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
+          # Der Gemini-Schluessel wird mit ausgeliefert, damit jeder die Seite
+          # ohne Einrichtung benutzen kann. Er steht deshalb NICHT im Quelltext,
+          # sondern als Actions-Geheimnis, und laesst sich dort austauschen,
+          # ohne etwas am Programm zu aendern.
+          VITE_GEMINI_SCHLUESSEL: ${{ secrets.VITE_GEMINI_SCHLUESSEL }}
 
       - name: Push dist to gh-pages
         run: |

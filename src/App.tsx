@@ -6,6 +6,8 @@ import { ladeNachherHerunter, teileNachherBild, teilenMoeglich } from './lib/sha
 import { bereiteBildVor, blobZuBase64 } from './lib/bild'
 import { GeminiFehler, saniereFoto } from './lib/gemini'
 import {
+  MITGELIEFERTER_SCHLUESSEL,
+  leseEigenenSchluessel,
   leseSchluessel,
   speichereSchluessel,
   uebernimmSchluesselAusLink,
@@ -50,6 +52,7 @@ export default function App() {
   const [schluessel, setSchluessel] = useState('')
   const [einstellungenOffen, setEinstellungenOffen] = useState(false)
   const [schluesselEntwurf, setSchluesselEntwurf] = useState('')
+  const [eigener, setEigener] = useState('')
   const [linkKopiert, setLinkKopiert] = useState(false)
   const [auswahlId, setAuswahlId] = useState<string | null>(null)
   const [gesichert, setGesichert] = useState(false)
@@ -64,9 +67,10 @@ export default function App() {
     // Die Einstellungen stehen absichtlich nicht in der Oberfläche: Im Einsatz
     // soll niemand am Schlüssel drehen. Erreichbar nur über #einstellungen.
     const einstellungen = window.location.hash.includes('einstellungen')
-    const wert = uebernimmSchluesselAusLink() || leseSchluessel()
-    setSchluessel(wert)
-    setSchluesselEntwurf(wert)
+    uebernimmSchluesselAusLink()
+    setSchluessel(leseSchluessel())
+    setEigener(leseEigenenSchluessel())
+    setSchluesselEntwurf(leseEigenenSchluessel())
     if (einstellungen) setEinstellungenOffen(true)
     if (demo && !demoGeladen) {
       demoGeladen = true
@@ -159,8 +163,11 @@ export default function App() {
   }
 
   function speichereEinstellungen() {
-    const wert = schluesselEntwurf.trim()
-    speichereSchluessel(wert)
+    const eingabe = schluesselEntwurf.trim()
+    speichereSchluessel(eingabe)
+    setEigener(eingabe)
+    // Ohne eigene Eingabe gilt wieder der mitgelieferte Schluessel.
+    const wert = eingabe || MITGELIEFERTER_SCHLUESSEL
     setSchluessel(wert)
     setEinstellungenOffen(false)
     // Alles, was auf den Schluessel gewartet hat, jetzt anstossen.
@@ -224,8 +231,20 @@ export default function App() {
             <h2>Einstellungen (nur Verwaltung)</h2>
             <p className="section-hint">
               Diese Seite ist absichtlich nicht verlinkt und nur über <code>#einstellungen</code> in
-              der Adresse erreichbar. Der Gemini-Schlüssel bleibt auf diesem Gerät gespeichert.
-              Kosten: etwa 4 Cent je Foto.
+              der Adresse erreichbar. Der Schlüssel wird mit dem Programm ausgeliefert: Wer die
+              Seite öffnet, kann sofort arbeiten, ohne etwas einzurichten. Das Feld unten
+              überschreibt ihn nur auf diesem Gerät, leer lassen und speichern nimmt wieder den
+              mitgelieferten. Kosten: etwa 4 Cent je Foto.
+            </p>
+            <p className="section-hint">
+              Gerade in Benutzung:{' '}
+              <strong>
+                {eigener
+                  ? 'eigener Schlüssel dieses Geräts'
+                  : MITGELIEFERTER_SCHLUESSEL
+                    ? 'mitgelieferter Schlüssel'
+                    : 'keiner – diese Fassung wurde ohne Schlüssel gebaut'}
+              </strong>
             </p>
             <div className="zeile">
               <input
@@ -244,13 +263,11 @@ export default function App() {
             </div>
             {schluessel && (
               <p className="section-hint" style={{ marginTop: 12 }}>
-                Einrichtungslink für die Kollegen:{' '}
+                Für die Kollegen genügt die normale Adresse, der Schlüssel ist schon drin. Nur wenn
+                ein einzelnes Gerät einen anderen Schlüssel bekommen soll:{' '}
                 <button className="btn btn-rand btn-klein" onClick={kopiereVerteilLink}>
                   {linkKopiert ? '✓ Link kopiert' : 'Link mit Schlüssel kopieren'}
-                </button>{' '}
-                Wer ihn einmal öffnet, hat den Schlüssel hinterlegt. Den Link aufbewahren: Sollte
-                ein Gerät den Schlüssel verlieren (gelöschte Browserdaten, neues Handy), genügt es,
-                ihn erneut zu öffnen.
+                </button>
               </p>
             )}
           </section>
@@ -258,9 +275,9 @@ export default function App() {
 
         {!schluessel && !einstellungenOffen && (
           <section className="card hinweis-warn">
-            Dieses Gerät ist noch nicht eingerichtet. Bitte den Einrichtungslink von Yann öffnen,
-            danach läuft alles automatisch. Fotos lassen sich schon auswählen, die Bearbeitung
-            startet aber erst danach.
+            Die Bildbearbeitung ist gerade nicht verfügbar, dieser Fassung fehlt der Zugang zu
+            Google. Bitte bei Yann melden. Fotos lassen sich schon auswählen, bearbeitet wird
+            aber nichts.
           </section>
         )}
 

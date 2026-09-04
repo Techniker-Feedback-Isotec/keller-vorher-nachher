@@ -1,22 +1,39 @@
 /**
- * Ablage des Gemini-API-Schluessels.
+ * Herkunft des Gemini-API-Schluessels.
  *
- * Der Schluessel liegt nur im localStorage des Geraets, nie im Quelltext und
- * nie im Repository. Zur Verteilung an die Kollegen kann ein Link mit dem
- * Schluessel im Fragment (#schluessel=...) verschickt werden: Das Fragment
- * verlaesst den Browser nicht (es wird nicht an den Server uebertragen),
- * beim ersten Oeffnen wird der Schluessel uebernommen und aus der
- * Adresszeile entfernt.
+ * Damit jeder das Werkzeug einfach ueber den Link benutzen kann, wird ein
+ * Schluessel **beim Bauen mitgeliefert**: Er steckt als Actions-Geheimnis
+ * `VITE_GEMINI_SCHLUESSEL` in GitHub, landet also nicht im Quelltext und nicht
+ * in der Versionsgeschichte, wohl aber im ausgelieferten Programm. Wer den
+ * Quelltext der Seite ansieht, kann ihn dort finden. Geschuetzt ist er nur
+ * durch die Beschraenkung auf die Generative Language API und auf die Adresse
+ * der Seite; die eigentliche Obergrenze ist das Prepaid-Guthaben.
+ *
+ * Reihenfolge: ein selbst hinterlegter Schluessel (localStorage, ueber
+ * #einstellungen oder einen Link mit #schluessel=...) hat Vorrang, sonst gilt
+ * der mitgelieferte. So laesst sich fuer einzelne Geraete ein eigener
+ * Schluessel setzen, ohne neu zu bauen.
  */
 
 const ABLAGE = 'vn-gemini-schluessel'
 
-export function leseSchluessel(): string {
+/** Der beim Bauen mitgelieferte Schluessel; leer, wenn beim Bauen keiner gesetzt war. */
+export const MITGELIEFERTER_SCHLUESSEL: string = (
+  import.meta.env.VITE_GEMINI_SCHLUESSEL ?? ''
+).trim()
+
+/** Eigener Schluessel dieses Geraets, falls einer hinterlegt wurde. */
+export function leseEigenenSchluessel(): string {
   try {
     return localStorage.getItem(ABLAGE) ?? ''
   } catch {
     return ''
   }
+}
+
+/** Der Schluessel, mit dem gearbeitet wird. */
+export function leseSchluessel(): string {
+  return leseEigenenSchluessel() || MITGELIEFERTER_SCHLUESSEL
 }
 
 export function speichereSchluessel(wert: string): void {
