@@ -1,11 +1,15 @@
 /**
  * PDF "ISOTEC Sanierungsvorschau" (Yann, 05.09.2026).
  *
- * Titelseite im ISOTEC-Design, danach je Foto eine Seite mit Vorher links und
- * Nachher rechts, genau in der Variante, die gerade ausgewaehlt ist. A4 quer,
- * weil zwei Bilder nebeneinander so am groessten werden. Farben aus dem
- * Corporate-Design-Handbuch, Schrift Helvetica (im Handbuch FF Dax, die liegt
- * hier nicht vor). pdf-lib laeuft komplett im Browser, wie in der Fotodoku.
+ * A4 hoch. Titelseite rein typografisch im ISOTEC-Design, ohne Bild (Yanns
+ * Vorgabe). Danach je Foto eine Seite mit Vorher oben und Nachher darunter,
+ * genau in der Variante, die gerade ausgewaehlt ist. Untereinander statt
+ * nebeneinander, weil die Bilder im Hochformat so deutlich groesser werden:
+ * bei einem Querformat-Foto 455 statt 248 Punkt Breite.
+ *
+ * Farben aus dem Corporate-Design-Handbuch, Schrift Helvetica (im Handbuch
+ * FF Dax, die liegt hier nicht als Datei vor). pdf-lib laeuft komplett im
+ * Browser, wie in der Fotodoku.
  */
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib'
 
@@ -16,9 +20,9 @@ const LIGHT = rgb(244 / 255, 244 / 255, 244 / 255) // #F4F4F4
 const MUTED = rgb(138 / 255, 127 / 255, 120 / 255)
 const WHITE = rgb(1, 1, 1)
 
-// A4 quer in Punkt
-const W = 841.89
-const H = 595.28
+// A4 hoch in Punkt
+const W = 595.28
+const H = 841.89
 const RAND = 40
 
 const FIRMA = 'Abdichtungstechnik Dipl.-Ing. Morscheck GmbH'
@@ -71,9 +75,9 @@ function marke(page: PDFPage, font: PDFFont, text: string, x: number, y: number,
 
 function fusszeile(page: PDFPage, regular: PDFFont, links: string, rechts: string) {
   page.drawRectangle({ x: 0, y: 0, width: W, height: 6, color: RED })
-  page.drawText(links, { x: RAND, y: 18, size: 8.5, font: regular, color: MUTED })
-  const b = regular.widthOfTextAtSize(rechts, 8.5)
-  page.drawText(rechts, { x: W - RAND - b, y: 18, size: 8.5, font: regular, color: MUTED })
+  page.drawText(links, { x: RAND, y: 18, size: 8, font: regular, color: MUTED })
+  const b = regular.widthOfTextAtSize(rechts, 8)
+  page.drawText(rechts, { x: W - RAND - b, y: 18, size: 8, font: regular, color: MUTED })
 }
 
 export async function erzeugeSanierungsvorschauPdf(
@@ -92,51 +96,51 @@ export async function erzeugeSanierungsvorschauPdf(
   const gesamt = eintraege.length + 1
   const datum = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
-  // ---- Titelseite ----
+  // ---- Titelseite: rein typografisch, ohne Bild ----
   {
     const page = doc.addPage([W, H])
     page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: WHITE })
 
-    // Logo oben links
-    const logoH = 34
+    // Logo oben links, darunter eine feine Linie als Abschluss des Kopfs
+    const logoH = 40
     const logoW = (logo.width / logo.height) * logoH
     page.drawImage(logo, { x: RAND, y: H - RAND - logoH, width: logoW, height: logoH })
+    page.drawLine({
+      start: { x: RAND, y: H - RAND - logoH - 24 },
+      end: { x: W - RAND, y: H - RAND - logoH - 24 },
+      thickness: 0.8,
+      color: GREY,
+    })
 
-    // Rechte Haelfte: das erste Nachher-Bild als Blickfang, auf hellem Feld
-    const feldX = W / 2
-    const feldY = 90
-    const feldB = W / 2 - RAND
-    const feldH = H - feldY - RAND - logoH - 20
-    page.drawRectangle({ x: feldX, y: feldY, width: feldB, height: feldH, color: LIGHT })
-    const hero = await doc.embedJpg(await zuJpeg(eintraege[0].nachher, 1400))
-    const hg = eingepasst(hero, feldB - 30, feldH - 30)
-    const hx = feldX + (feldB - hg.w) / 2
-    const hy = feldY + (feldH - hg.h) / 2
-    page.drawImage(hero, { x: hx, y: hy, width: hg.w, height: hg.h })
-    marke(page, bold, 'Nachher', hx + 10, hy + hg.h - 28, RED)
-
-    // Linke Haelfte: Titel
-    const textX = RAND
-    let y = H / 2 + 70
-    page.drawText('Sanierungsvorschau', { x: textX, y, size: 38, font: bold, color: BROWN })
-    y -= 18
-    page.drawRectangle({ x: textX, y, width: 70, height: 5, color: RED })
-    y -= 34
-    page.drawText('Ihr Keller vorher und nachher', { x: textX, y, size: 16, font: regular, color: MUTED })
-    y -= 40
-    page.drawText(`Erstellt am ${datum}`, { x: textX, y, size: 12, font: regular, color: BROWN })
+    // Titelblock etwa auf halber Hoehe
+    let y = H * 0.56
+    page.drawText('Sanierungsvorschau', { x: RAND, y, size: 34, font: bold, color: BROWN })
     y -= 20
-    page.drawText(
-      `${eintraege.length} ${eintraege.length === 1 ? 'Foto' : 'Fotos'} im Vergleich`,
-      { x: textX, y, size: 12, font: regular, color: BROWN },
-    )
-    y -= 20
-    page.drawText(FIRMA, { x: textX, y, size: 12, font: regular, color: BROWN })
+    page.drawRectangle({ x: RAND, y, width: 80, height: 5, color: RED })
+    y -= 32
+    page.drawText('Ihr Keller vorher und nachher', { x: RAND, y, size: 15, font: regular, color: MUTED })
 
-    fusszeile(page, regular, `${FIRMA} · ${HINWEIS}`, `Seite 1 von ${gesamt}`)
+    // Infoblock: warmes Hellgrau mit roter Akzentkante, wie die Karten in der App
+    const blockH = 104
+    const blockY = 150
+    page.drawRectangle({ x: RAND, y: blockY, width: W - 2 * RAND, height: blockH, color: LIGHT })
+    page.drawRectangle({ x: RAND, y: blockY, width: 4, height: blockH, color: RED })
+    const zeilen: Array<[string, string]> = [
+      ['Erstellt am', datum],
+      ['Umfang', `${eintraege.length} ${eintraege.length === 1 ? 'Foto' : 'Fotos'} im Vergleich`],
+      ['Ausgeführt von', FIRMA],
+    ]
+    let zy = blockY + blockH - 30
+    for (const [kopf, wert] of zeilen) {
+      page.drawText(kopf, { x: RAND + 20, y: zy, size: 9, font: regular, color: MUTED })
+      page.drawText(wert, { x: RAND + 130, y: zy, size: 11, font: bold, color: BROWN })
+      zy -= 26
+    }
+
+    fusszeile(page, regular, HINWEIS, `Seite 1 von ${gesamt}`)
   }
 
-  // ---- Je Foto eine Seite: Vorher links, Nachher rechts ----
+  // ---- Je Foto eine Seite: Vorher oben, Nachher unten ----
   for (const [i, e] of eintraege.entries()) {
     const page = doc.addPage([W, H])
     page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: WHITE })
@@ -146,29 +150,30 @@ export async function erzeugeSanierungsvorschauPdf(
     const rechts = `Foto ${i + 1} von ${eintraege.length}`
     const rechtsB = regular.widthOfTextAtSize(rechts, 10)
     page.drawText(rechts, { x: W - RAND - rechtsB, y: kopfY, size: 10, font: regular, color: MUTED })
-    const titel = gekuerzt(bold, e.name, 16, W - 2 * RAND - rechtsB - 20)
-    page.drawText(titel, { x: RAND, y: kopfY, size: 16, font: bold, color: BROWN })
+    const titel = gekuerzt(bold, e.name, 15, W - 2 * RAND - rechtsB - 20)
+    page.drawText(titel, { x: RAND, y: kopfY, size: 15, font: bold, color: BROWN })
     if (e.variante && e.variante !== 'Standard') {
-      page.drawText(e.variante, { x: RAND, y: kopfY - 16, size: 10, font: regular, color: MUTED })
+      page.drawText(e.variante, { x: RAND, y: kopfY - 15, size: 9.5, font: regular, color: MUTED })
     }
-    page.drawLine({ start: { x: RAND, y: H - 80 }, end: { x: W - RAND, y: H - 80 }, thickness: 0.8, color: GREY })
+    const trennY = H - 80
+    page.drawLine({ start: { x: RAND, y: trennY }, end: { x: W - RAND, y: trennY }, thickness: 0.8, color: GREY })
 
-    // Zwei Bildfelder
-    const oben = H - 96
+    // Zwei Bildfelder untereinander
+    const oben = trennY - 16
     const unten = 44
-    const spalt = 20
-    const feldB = (W - 2 * RAND - spalt) / 2
-    const feldH = oben - unten
+    const spalt = 18
+    const feldB = W - 2 * RAND
+    const feldH = (oben - unten - spalt) / 2
     const vorher = await doc.embedJpg(await zuJpeg(e.vorher))
     const nachher = await doc.embedJpg(await zuJpeg(e.nachher))
-    const paare: Array<[PDFImage, number, string, ReturnType<typeof rgb>]> = [
-      [vorher, RAND, 'Vorher', BROWN],
-      [nachher, RAND + feldB + spalt, 'Nachher', RED],
+    const felder: Array<[PDFImage, number, string, ReturnType<typeof rgb>]> = [
+      [vorher, oben - feldH, 'Vorher', BROWN],
+      [nachher, unten, 'Nachher', RED],
     ]
-    for (const [bild, x0, text, farbe] of paare) {
+    for (const [bild, feldY, text, farbe] of felder) {
       const g = eingepasst(bild, feldB, feldH)
-      const x = x0 + (feldB - g.w) / 2
-      const y = oben - g.h
+      const x = RAND + (feldB - g.w) / 2
+      const y = feldY + (feldH - g.h) / 2
       page.drawImage(bild, { x, y, width: g.w, height: g.h })
       marke(page, bold, text, x + 10, y + g.h - 28, farbe)
     }
