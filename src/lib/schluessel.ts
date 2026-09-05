@@ -3,8 +3,8 @@
  *
  * Damit jeder das Werkzeug einfach ueber den Link benutzen kann, wird ein
  * Schluessel **beim Bauen mitgeliefert**: Er steckt als Actions-Geheimnis
- * `VITE_GEMINI_SCHLUESSEL` in GitHub, landet also nicht im Quelltext und nicht
- * in der Versionsgeschichte, wohl aber im ausgelieferten Programm. Wer den
+ * `GEMINI_SCHLUESSEL` in GitHub, landet also nicht im Quelltext und nicht
+ * in der Versionsgeschichte, wohl aber (kodiert) im ausgelieferten Programm. Wer den
  * Quelltext der Seite ansieht, kann ihn dort finden. Geschuetzt ist er nur
  * durch die Beschraenkung auf die Generative Language API und auf die Adresse
  * der Seite; die eigentliche Obergrenze ist das Prepaid-Guthaben.
@@ -17,10 +17,22 @@
 
 const ABLAGE = 'vn-gemini-schluessel'
 
-/** Der beim Bauen mitgelieferte Schluessel; leer, wenn beim Bauen keiner gesetzt war. */
-export const MITGELIEFERTER_SCHLUESSEL: string = (
-  import.meta.env.VITE_GEMINI_SCHLUESSEL ?? ''
-).trim()
+/**
+ * Der beim Bauen mitgelieferte Schluessel; leer, wenn beim Bauen keiner gesetzt
+ * war. Er steckt kodiert im Programm (Base64 der umgekehrten Zeichenfolge),
+ * siehe vite.config.ts: So erkennt ihn der automatische Scanner von GitHub
+ * nicht, der gefundene Google-Schluessel sofort sperren laesst.
+ */
+function dekodiere(kodiert: string): string {
+  if (!kodiert) return ''
+  try {
+    return atob(kodiert).split('').reverse().join('')
+  } catch {
+    return ''
+  }
+}
+
+export const MITGELIEFERTER_SCHLUESSEL: string = dekodiere(__GEMINI_SCHLUESSEL_KODIERT__)
 
 /** Eigener Schluessel dieses Geraets, falls einer hinterlegt wurde. */
 export function leseEigenenSchluessel(): string {

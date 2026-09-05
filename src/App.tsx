@@ -117,6 +117,23 @@ export default function App() {
             await new Promise((r) => setTimeout(r, 4000))
             return await saniereFoto(base64, schluesselRef.current)
           }
+          // Ein auf diesem Geraet hinterlegter Schluessel, den Google ablehnt
+          // (z. B. der gesperrte vom 04.09.2026), wird verworfen; danach gilt
+          // wieder der mitgelieferte, und der Versuch wird damit wiederholt.
+          if (
+            fehler instanceof GeminiFehler &&
+            fehler.schluesselAbgelehnt &&
+            leseEigenenSchluessel() &&
+            MITGELIEFERTER_SCHLUESSEL &&
+            schluesselRef.current !== MITGELIEFERTER_SCHLUESSEL
+          ) {
+            speichereSchluessel('')
+            setEigener('')
+            setSchluesselEntwurf('')
+            setSchluessel(MITGELIEFERTER_SCHLUESSEL)
+            schluesselRef.current = MITGELIEFERTER_SCHLUESSEL
+            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL)
+          }
           throw fehler
         }
       })

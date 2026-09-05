@@ -51,9 +51,12 @@ const PROMPT = [
 export class GeminiFehler extends Error {
   /** true, wenn ein weiterer Versuch ohne Aenderung sinnvoll sein kann. */
   wiederholbar: boolean
-  constructor(nachricht: string, wiederholbar: boolean) {
+  /** true, wenn Google den Schluessel selbst abgelehnt hat (ungueltig, gesperrt, falsche Herkunft). */
+  schluesselAbgelehnt: boolean
+  constructor(nachricht: string, wiederholbar: boolean, schluesselAbgelehnt = false) {
     super(nachricht)
     this.wiederholbar = wiederholbar
+    this.schluesselAbgelehnt = schluesselAbgelehnt
   }
 }
 
@@ -99,9 +102,12 @@ export async function saniereFoto(base64Jpeg: string, schluessel: string): Promi
       /* Rumpf war kein JSON */
     }
     if (antwort.status === 400 || antwort.status === 401 || antwort.status === 403) {
+      // Googles Text mitgeben: "reported as leaked" heisst gesperrt, "not valid"
+      // heisst geloescht oder falsch, "referer" heisst falsche Herkunft.
       throw new GeminiFehler(
-        'Der API-Schlüssel wurde nicht akzeptiert. Schlüssel unter Einstellungen prüfen.',
+        `Google hat den Zugangsschlüssel abgelehnt. Bitte bei Yann melden. ${detail}`.trim(),
         false,
+        true,
       )
     }
     if (antwort.status === 429) {
