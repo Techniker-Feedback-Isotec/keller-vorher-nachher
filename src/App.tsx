@@ -18,24 +18,30 @@ import {
  * Je Foto lassen sich zwei Optionen anhaken (Yann, 05.09.2026):
  * - boden:  der Boden wird vollflaechig hellgrau saniert statt nur gesaeubert.
  * - moebel: passende Einrichtung zeigt den moeglichen Nutzen des Raums.
- * Jede Kombination wird nur einmal erzeugt und bleibt erhalten; man wechselt
- * per Haekchen frei zwischen den fertigen Ergebnissen.
+ * Dazu kommt das Klappmenue "Bestand": alles, was die KI erkannt hat, ist
+ * angehakt; was der Nutzer abhakt, verschwindet aus dem Ergebnis.
+ * Jede Kombination wird nur einmal erzeugt und bleibt erhalten.
  */
 type Optionen = { boden: boolean; moebel: boolean }
 
 const STANDARD: Optionen = { boden: false, moebel: false }
 
+/** Hoechstens so viele Fotos je Upload, damit nicht verschwenderisch gearbeitet wird (Yann, 05.09.2026). */
+const MAX_JE_UPLOAD = 3
+
 /** Schluessel, unter dem das Ergebnis einer Kombination abgelegt wird. */
-function kombination(o: Optionen): string {
-  return `${o.boden ? 'boden' : 'standard'}${o.moebel ? '+moebel' : ''}`
+function kombination(o: Optionen, entfernt: number[]): string {
+  const basis = `${o.boden ? 'boden' : 'standard'}${o.moebel ? '+moebel' : ''}`
+  return entfernt.length ? `${basis}|-${[...entfernt].sort((a, b) => a - b).join(',')}` : basis
 }
 
 /** Lesbare Bezeichnung der Kombination fuer Marke und Dateinamen. */
-function bezeichnung(o: Optionen): string {
-  if (o.boden && o.moebel) return 'Boden saniert, möbliert'
-  if (o.boden) return 'Boden saniert'
-  if (o.moebel) return 'Möbliert'
-  return 'Standard'
+function bezeichnung(o: Optionen, entfernt: number[]): string {
+  const teile: string[] = []
+  if (o.boden) teile.push('Boden saniert')
+  if (o.moebel) teile.push('möbliert')
+  if (entfernt.length) teile.push(`${entfernt.length} entfernt`)
+  return teile.length ? teile.join(', ') : 'Standard'
 }
 
 type Ergebnis = {
@@ -59,10 +65,27 @@ type Foto = {
   optionen: Optionen
   /** Vom Textmodell erkannter Bestand; einmal je Foto ermittelt, fuer alle Kombinationen genutzt. */
   bestand?: string
+  /** Indizes der Bestandszeilen, die im gezeigten Ergebnis fehlen sollen. */
+  entfernt: number[]
+  /** Auswahl im Klappmenue, wird erst mit "Anwenden" zu entfernt. */
+  entwurfEntfernt: number[]
+}
+
+function bestandZeilen(foto: Foto): string[] {
+  return (foto.bestand ?? '')
+    .split('\n')
+    .map((z) => z.trim())
+    .filter(Boolean)
 }
 
 function aktuell(foto: Foto): Ergebnis | undefined {
-  return foto.ergebnisse[kombination(foto.optionen)]
+  return foto.ergebnisse[kombination(foto.optionen, foto.entfernt)]
+}
+
+function gleicheMenge(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false
+  const s = new Set(a)
+  return b.every((x) => s.has(x))
 }
 
 /**
@@ -96,6 +119,7 @@ export default function App() {
   const [gesichert, setGesichert] = useState(false)
   const [zeigeIndex, setZeigeIndex] = useState<number | null>(null)
   const [ziehtDatei, setZiehtDatei] = useState(false)
+  const [uploadHinweis, setUploadHinweis] = useState('')
   const dateiFeld = useRef<HTMLInputElement>(null)
   const schluesselRef = useRef('')
   schluesselRef.current = schluessel
@@ -130,6 +154,14 @@ export default function App() {
               vorherBlob: vorher,
               status: 'bereit',
               optionen: STANDARD,
+              entfernt: [],
+              entwurfEntfernt: [],
+              bestand: [
+                '1 Rohr, waagerecht unter der Decke, grau, über die ganze Breite',
+                '1 Fenster, oben links, weißer Rahmen',
+                '1 Waschmaschine, Mitte, weiß',
+                '1 Leuchte, Decke, Langfeldleuchte',
+              ].join('\n'),
               ergebnisse: {
                 standard: { status: 'fertig', url: URL.createObjectURL(nachher), blob: nachher },
                 boden: { status: 'fertig', url: URL.createObjectURL(nachherBoden), blob: nachherBoden },
@@ -160,12 +192,12 @@ export default function App() {
    * Erzeugt eine Kombination fuer ein Foto. Ein wiederholbarer Fehler bekommt
    * einen zweiten Versuch; der Bestand wird je Foto nur einmal ermittelt.
    */
-  async function verarbeite(id: string, vorherBlob: Blob, optionen: Optionen) {
+  async function verarbeite(id: string, vorherBlob: Blob, optionen: Optionen, entfernt: number[]) {
     if (!schluesselRef.current) {
       aktualisiere(id, { status: 'wartet' })
       return
     }
-    const kombi = kombination(optionen)
+    const kombi = kombination(optionen, entfernt)
     setzeErgebnis(id, kombi, { status: 'laeuft' })
     try {
       const base64 = await blobZuBase64(vorherBlob)
@@ -177,10 +209,18 @@ export default function App() {
           bestand = await erfasseBestand(base64, schluesselRef.current)
           if (bestand) aktualisiere(id, { bestand })
         }
+        // Abgewaehlte Zeilen wandern aus der Pflichtliste in den Entfernen-Block.
+        const zeilen = bestand
+          .split('\n')
+          .map((z) => z.trim())
+          .filter(Boolean)
+        const entfernen = entfernt.map((i) => zeilen[i]).filter(Boolean)
+        const bleibt = zeilen.filter((_, i) => !entfernt.includes(i)).join('\n')
         const auftrag = {
-          bestand: bestand || undefined,
+          bestand: bleibt || undefined,
           bodenHellgrau: optionen.boden,
           moeblieren: optionen.moebel,
+          entfernen,
         }
         try {
           return await saniereFoto(base64, schluesselRef.current, auftrag)
@@ -219,8 +259,14 @@ export default function App() {
   }
 
   async function nimmDateien(dateien: FileList | File[]) {
-    for (const datei of Array.from(dateien)) {
-      if (!datei.type.startsWith('image/') && !/\.(heic|heif)$/i.test(datei.name)) continue
+    const bilder = Array.from(dateien).filter(
+      (d) => d.type.startsWith('image/') || /\.(heic|heif)$/i.test(d.name),
+    )
+    if (bilder.length > MAX_JE_UPLOAD) {
+      setUploadHinweis(`Höchstens ${MAX_JE_UPLOAD} Fotos auf einmal. Die ersten ${MAX_JE_UPLOAD} wurden übernommen.`)
+      window.setTimeout(() => setUploadHinweis(''), 6000)
+    }
+    for (const datei of bilder.slice(0, MAX_JE_UPLOAD)) {
       const id = String(naechsteId++)
       const name = datei.name.replace(/\.[^.]+$/, '')
       setFotos((liste) => [
@@ -232,13 +278,15 @@ export default function App() {
           vorherBlob: datei,
           status: 'liest',
           optionen: STANDARD,
+          entfernt: [],
+          entwurfEntfernt: [],
           ergebnisse: {},
         },
       ])
       try {
         const { blob } = await bereiteBildVor(datei)
         aktualisiere(id, { vorherBlob: blob, vorherUrl: URL.createObjectURL(blob), status: 'bereit' })
-        void verarbeite(id, blob, STANDARD)
+        void verarbeite(id, blob, STANDARD, [])
       } catch {
         aktualisiere(id, { status: 'lesefehler', fehler: 'Foto konnte nicht gelesen werden.' })
       }
@@ -249,12 +297,31 @@ export default function App() {
   function schalteOption(foto: Foto, teil: keyof Optionen, wert: boolean) {
     const optionen = { ...foto.optionen, [teil]: wert }
     aktualisiere(foto.id, { optionen })
-    if (!foto.ergebnisse[kombination(optionen)]) void verarbeite(foto.id, foto.vorherBlob, optionen)
+    if (!foto.ergebnisse[kombination(optionen, foto.entfernt)]) {
+      void verarbeite(foto.id, foto.vorherBlob, optionen, foto.entfernt)
+    }
+  }
+
+  /** Haekchen im Bestandsmenue: nur der Entwurf aendert sich. */
+  function schalteBestand(foto: Foto, index: number, behalten: boolean) {
+    const entwurf = behalten
+      ? foto.entwurfEntfernt.filter((i) => i !== index)
+      : [...foto.entwurfEntfernt, index]
+    aktualisiere(foto.id, { entwurfEntfernt: entwurf })
+  }
+
+  /** "Anwenden" im Bestandsmenue: Entwurf uebernehmen, Ergebnis bei Bedarf erzeugen. */
+  function wendeBestandAn(foto: Foto) {
+    const entfernt = [...foto.entwurfEntfernt]
+    aktualisiere(foto.id, { entfernt })
+    if (!foto.ergebnisse[kombination(foto.optionen, entfernt)]) {
+      void verarbeite(foto.id, foto.vorherBlob, foto.optionen, entfernt)
+    }
   }
 
   /** Die gerade gezeigte Kombination noch einmal erzeugen. */
   function bearbeiteErneut(foto: Foto) {
-    void verarbeite(foto.id, foto.vorherBlob, foto.optionen)
+    void verarbeite(foto.id, foto.vorherBlob, foto.optionen, foto.entfernt)
   }
 
   function entferne(id: string) {
@@ -280,7 +347,7 @@ export default function App() {
       for (const foto of fotos) {
         if (foto.status === 'wartet') {
           aktualisiere(foto.id, { status: 'bereit' })
-          void verarbeite(foto.id, foto.vorherBlob, foto.optionen)
+          void verarbeite(foto.id, foto.vorherBlob, foto.optionen, foto.entfernt)
         }
       }
     }
@@ -304,13 +371,13 @@ export default function App() {
     anzeigbar.find((f) => aktuell(f)?.status === 'fertig') ??
     anzeigbar[0]
   const gewaehltesErgebnis = gewaehlt ? aktuell(gewaehlt) : undefined
-  const gewaehlteKombi = gewaehlt ? kombination(gewaehlt.optionen) : ''
+  const gewaehlteKombi = gewaehlt ? kombination(gewaehlt.optionen, gewaehlt.entfernt) : ''
 
   const fertige: ViewerFoto[] = anzeigbar
     .filter((f) => aktuell(f)?.status === 'fertig')
     .map((f) => {
       const e = aktuell(f)!
-      const zusatz = bezeichnung(f.optionen)
+      const zusatz = bezeichnung(f.optionen, f.entfernt)
       return {
         id: f.id,
         name: zusatz === 'Standard' ? f.name : `${f.name} (${zusatz})`,
@@ -329,8 +396,8 @@ export default function App() {
   }, [gewaehlt?.id, gewaehlteKombi])
 
   function dateiname(foto: Foto): string {
-    const zusatz = bezeichnung(foto.optionen)
-    return zusatz === 'Standard' ? foto.name : `${foto.name} ${zusatz.replace(', ', ' ')}`
+    const zusatz = bezeichnung(foto.optionen, foto.entfernt)
+    return zusatz === 'Standard' ? foto.name : `${foto.name} ${zusatz.replace(/, /g, ' ')}`
   }
 
   function statustext(foto: Foto): string {
@@ -360,6 +427,49 @@ export default function App() {
           Möblieren
         </label>
       </div>
+    )
+  }
+
+  /** Klappmenue "Bestand": alles Erkannte angehakt, Abgehaktes verschwindet nach "Anwenden". */
+  function bestandMenue(foto: Foto) {
+    const zeilen = bestandZeilen(foto)
+    if (zeilen.length === 0) return null
+    const geaendert = !gleicheMenge(foto.entwurfEntfernt, foto.entfernt)
+    return (
+      <details className="bestand-menue">
+        <summary>
+          Bestand
+          {foto.entfernt.length > 0 && <span className="bestand-zahl">−{foto.entfernt.length}</span>}
+        </summary>
+        <div className="bestand-liste">
+          {zeilen.map((zeile, i) => (
+            <label key={i} className="kachel-option">
+              <input
+                type="checkbox"
+                checked={!foto.entwurfEntfernt.includes(i)}
+                onChange={(e) => schalteBestand(foto, i, e.target.checked)}
+              />
+              {zeile}
+            </label>
+          ))}
+          <div className="bestand-knoepfe">
+            <button
+              className="btn btn-rand btn-klein"
+              onClick={() => aktualisiere(foto.id, { entwurfEntfernt: [] })}
+              disabled={foto.entwurfEntfernt.length === 0}
+            >
+              Alle behalten
+            </button>
+            <button
+              className="btn btn-rot btn-klein"
+              onClick={() => wendeBestandAn(foto)}
+              disabled={!geaendert}
+            >
+              Anwenden
+            </button>
+          </div>
+        </div>
+      </details>
     )
   }
 
@@ -452,9 +562,10 @@ export default function App() {
             onClick={() => dateiFeld.current?.click()}
           >
             <p>
-              <strong>Fotos auswählen</strong> oder hierher ziehen
+              <strong>Fotos auswählen</strong> oder hierher ziehen (höchstens {MAX_JE_UPLOAD} auf einmal)
             </p>
           </div>
+          {uploadHinweis && <p className="upload-hinweis">{uploadHinweis}</p>}
           <input
             ref={dateiFeld}
             type="file"
@@ -569,10 +680,13 @@ export default function App() {
                     <div className="fenster-kopf">
                       <strong className="fenster-name" title={gewaehlt.name}>
                         {gewaehlt.name}
-                        <span className="kachel-marke">{bezeichnung(gewaehlt.optionen)}</span>
+                        <span className="kachel-marke">
+                          {bezeichnung(gewaehlt.optionen, gewaehlt.entfernt)}
+                        </span>
                       </strong>
                       <div className="fenster-knoepfe">
                         {optionsHaken(gewaehlt, 'fenster-optionen')}
+                        {bestandMenue(gewaehlt)}
                         {gewaehltesErgebnis?.status === 'fertig' && gewaehltesErgebnis.blob && (
                           <>
                             <button
@@ -626,14 +740,6 @@ export default function App() {
                         <span className="dreher dreher-dunkel" />
                         {statustext(gewaehlt)}
                       </p>
-                    )}
-
-                    {/* Diagnose nur fuer die Verwaltung (#einstellungen), nicht im Einsatz. */}
-                    {einstellungenOffen && gewaehlt.bestand && (
-                      <details className="bestand">
-                        <summary>Erkannter Bestand</summary>
-                        <pre>{gewaehlt.bestand}</pre>
-                      </details>
                     )}
                   </>
                 ) : (

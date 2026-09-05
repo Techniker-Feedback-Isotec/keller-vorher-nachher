@@ -517,6 +517,105 @@ main {
   font-size: 0.85rem;
 }
 
+/* Klappmenue "Bestand": alles Erkannte angehakt, Abgehaktes verschwindet */
+.bestand-menue {
+  position: relative;
+}
+
+.bestand-menue > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--white);
+  border: 1px solid var(--grey);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.82rem;
+  color: var(--brown);
+  line-height: 1.2;
+}
+
+.bestand-menue > summary::-webkit-details-marker {
+  display: none;
+}
+
+.bestand-menue > summary::after {
+  content: '▾';
+  font-size: 0.75rem;
+}
+
+.bestand-menue[open] > summary {
+  background: var(--light);
+}
+
+.bestand-zahl {
+  background: var(--red);
+  color: var(--white);
+  border-radius: 10px;
+  padding: 0 6px;
+  font-size: 0.72rem;
+}
+
+.bestand-liste {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  min-width: 320px;
+  max-width: min(460px, 90vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--white);
+  border: 1px solid var(--grey);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(86, 74, 68, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.bestand-liste .kachel-option {
+  align-items: flex-start;
+  font-size: 0.83rem;
+  color: var(--brown);
+  line-height: 1.35;
+}
+
+.bestand-liste .kachel-option input {
+  margin-top: 3px;
+}
+
+.bestand-knoepfe {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--grey);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.upload-hinweis {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: #8a5a00;
+}
+
+@media (max-width: 900px) {
+  .bestand-liste {
+    left: 0;
+    right: auto;
+  }
+}
+
 .dreher-dunkel {
   display: inline-block;
   border-color: rgba(86, 74, 68, 0.25);

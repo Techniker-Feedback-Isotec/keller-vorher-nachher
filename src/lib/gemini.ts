@@ -131,27 +131,52 @@ const REGEL_GEGENSTAENDE = [
   'Fest installierte Dinge bleiben unverändert erhalten: Geräte wie Waschmaschinen, Trockner, Heizungen und Boiler samt Schläuchen, Wasseranschlüsse und Armaturen, Türen, Fenster, Treppen, Bodenabläufe, Lichtschalter, Steckdosen und Lampen.',
 ]
 
-function regelAllgemein(moeblieren: boolean): string[] {
+function regelAllgemein(moeblieren: boolean, entferntEtwas: boolean): string[] {
+  const ausnahme = entferntEtwas ? ' Ausgenommen sind allein die unter ENTFERNEN genannten Elemente, die fehlen müssen.' : ''
   return [
     'ALLGEMEIN:',
     'Behalte exakt dieselbe Kameraperspektive und Raumgeometrie bei.',
     'Der Raum wirkt hell, trocken und sauber, mit neutraler heller Ausleuchtung.',
     'Das Ergebnis muss wie ein echtes, unbearbeitetes Foto desselben Raums aussehen.',
     'Kein Text, kein Wasserzeichen.',
-    moeblieren
-      ? 'Prüfe zum Schluss: Fenster, Türen, Rohre, Heizkörper und vorhandene Geräte sind in Anzahl und Lage genau wie auf dem Foto, nichts davon fehlt. Neu ist ausschließlich die beschriebene Einrichtung. Die sanierten Wandflächen sind glatte, einfarbig weiße Flächen ohne erkennbares Stein- oder Fugenmuster.'
-      : 'Prüfe zum Schluss: Fenster, Türen, Rohre, Heizkörper und Geräte sind in Anzahl und Lage genau wie auf dem Foto. Nichts fehlt, nichts ist neu. Die sanierten Wandflächen sind glatte, einfarbig weiße Flächen ohne erkennbares Stein- oder Fugenmuster.',
+    (moeblieren
+      ? 'Prüfe zum Schluss: Fenster, Türen, Rohre, Heizkörper und vorhandene Geräte sind in Anzahl und Lage genau wie auf dem Foto, nichts davon fehlt. Neu ist ausschließlich die beschriebene Einrichtung.'
+      : 'Prüfe zum Schluss: Fenster, Türen, Rohre, Heizkörper und Geräte sind in Anzahl und Lage genau wie auf dem Foto. Nichts fehlt, nichts ist neu.') +
+      ausnahme +
+      ' Die sanierten Wandflächen sind glatte, einfarbig weiße Flächen ohne erkennbares Stein- oder Fugenmuster.',
+  ]
+}
+
+/**
+ * Abgewaehlte Bestandselemente (Yann, 05.09.2026): Der Nutzer hakt im
+ * Klappmenue "Bestand" ab, was im Ergebnis fehlen soll, etwa ein altes Rohr
+ * unter der Decke. Der Block hat Vorrang vor allen Erhalten-Regeln, sonst
+ * widerspraeche er ihnen.
+ */
+function entfernenBlock(entfernen: string[]): string[] {
+  if (entfernen.length === 0) return []
+  return [
+    '',
+    'ENTFERNEN (hat Vorrang vor allen Regeln zum Erhalt von Leitungen, Technik und Geräten):',
+    'Folgende Elemente sind im Ergebnis nicht mehr vorhanden. Entferne sie rückstandslos, samt Halterungen, Schellen, Schatten und Bohrlöchern, und stelle die Fläche dahinter so dar wie die umgebende sanierte Wand, Decke oder der Boden. Ersetze sie durch nichts anderes:',
+    ...entfernen.map((e) => `- ${e}`),
   ]
 }
 
 /** Der Arbeitsauftrag: alle Waende und die Decke werden saniert, der Boden je nach Variante. */
-function prompt(bestand?: string, bodenHellgrau = false, moeblieren = false): string {
+function prompt(
+  bestand?: string,
+  bodenHellgrau = false,
+  moeblieren = false,
+  entfernen: string[] = [],
+): string {
   return [
   'Bearbeite dieses Foto eines Kellers.',
   'Zeige exakt denselben Raum nach einer professionellen Kellersanierung. Halte dich genau an diese Regeln:',
   '',
   ...regelErhalten(moeblieren),
   ...bestandBlock(bestand),
+  ...entfernenBlock(entfernen),
   '',
   'WÄNDE:',
   ...REGEL_WAND_SANIERT,
@@ -166,7 +191,7 @@ function prompt(bestand?: string, bodenHellgrau = false, moeblieren = false): st
   ...REGEL_GEGENSTAENDE,
   ...(moeblieren ? ['', ...REGEL_EINRICHTUNG] : []),
   '',
-  ...regelAllgemein(moeblieren),
+  ...regelAllgemein(moeblieren, entfernen.length > 0),
 ].join('\n')
 }
 
@@ -198,6 +223,12 @@ export type SanierOptionen = {
   bodenHellgrau?: boolean
   /** Variante "Moeblieren": passende Einrichtung, die den Nutzen des Raums zeigt. */
   moeblieren?: boolean
+  /**
+   * Elemente aus dem erkannten Bestand, die der Nutzer abgewaehlt hat (Yann,
+   * 05.09.2026): Sie sollen im Ergebnis verschwinden. Die Zeilen stammen aus
+   * der Bestandsliste, damit das Modell dasselbe Element meint.
+   */
+  entfernen?: string[]
 }
 
 /** Schickt das Vorher-Bild (JPEG, Base64) an Gemini und liefert das Nachher-Bild. */
@@ -219,7 +250,14 @@ export async function saniereFoto(
           {
             parts: [
               { inlineData: { mimeType: 'image/jpeg', data: base64Jpeg } },
-              { text: prompt(optionen.bestand, optionen.bodenHellgrau ?? false, optionen.moeblieren ?? false) },
+              {
+                text: prompt(
+                  optionen.bestand,
+                  optionen.bodenHellgrau ?? false,
+                  optionen.moeblieren ?? false,
+                  optionen.entfernen ?? [],
+                ),
+              },
             ],
           },
         ],
