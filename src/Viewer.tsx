@@ -90,7 +90,6 @@ export default function Viewer({ fotos, index, onIndex, onClose }: Props) {
         )}
       </div>
 
-      <p className="viewer-hinweis">Regler ziehen: links mehr Nachher, rechts mehr Vorher</p>
     </div>
   )
 }

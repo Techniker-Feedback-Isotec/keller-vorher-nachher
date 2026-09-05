@@ -46,7 +46,7 @@ type Foto = {
 
 const VARIANTEN_NAME: Record<Variante, string> = {
   standard: 'Standard',
-  boden: 'Boden hellgrau',
+  boden: 'Boden sanieren',
 }
 
 function aktuell(foto: Foto): Ergebnis | undefined {
@@ -294,7 +294,7 @@ export default function App() {
       const e = aktuell(f)!
       return {
         id: f.id,
-        name: f.variante === 'boden' ? `${f.name} (Boden hellgrau)` : f.name,
+        name: f.variante === 'boden' ? `${f.name} (Boden saniert)` : f.name,
         vorherUrl: f.vorherUrl,
         nachherUrl: e.url!,
         nachherBlob: e.blob!,
@@ -310,7 +310,7 @@ export default function App() {
   }, [gewaehlt?.id, gewaehlt?.variante])
 
   function dateiname(foto: Foto): string {
-    return foto.variante === 'boden' ? `${foto.name} Boden hellgrau` : foto.name
+    return foto.variante === 'boden' ? `${foto.name} Boden saniert` : foto.name
   }
 
   return (
@@ -320,10 +320,7 @@ export default function App() {
           <div className="header-brand">
             <img className="header-logo" src={logo} alt="ISOTEC" />
             <div className="header-divider" />
-            <div>
-              <h1>ISOTEC-Sanierungsvorschau</h1>
-              <p className="header-kicker">Vorher-Nachher aus dem Kellerfoto</p>
-            </div>
+            <h1>ISOTEC-Sanierungsvorschau</h1>
           </div>
         </div>
       </header>
@@ -407,12 +404,6 @@ export default function App() {
             <p>
               <strong>Fotos auswählen</strong> oder hierher ziehen
             </p>
-            <p className="ablage-klein">
-              Jedes Foto wird automatisch bearbeitet: Wände und Decke erscheinen frisch saniert und
-              weiß, der Boden bleibt. Mit dem Häkchen „Boden hellgrau" am Foto entsteht zusätzlich
-              eine Variante mit hellgrau beschichtetem Boden. Zur Bearbeitung wird das Foto an
-              Google (Gemini) übertragen; das Tool selbst speichert nichts.
-            </p>
           </div>
           <input
             ref={dateiFeld}
@@ -432,10 +423,6 @@ export default function App() {
             <h2>
               <span className="step">2</span>Vorher-Nachher
             </h2>
-            <p className="section-hint">
-              Foto in der Übersicht antippen, rechts erscheint der Vergleich. Das Häkchen am Foto
-              wechselt zur Variante mit hellgrauem Boden und erzeugt sie beim ersten Mal.
-            </p>
             <div className="uebersicht">
               <div className="galerie">
                 {fotos.map((foto) => {
@@ -470,7 +457,7 @@ export default function App() {
                             {foto.status === 'liest'
                               ? 'Wird gelesen …'
                               : foto.variante === 'boden'
-                                ? 'Boden wird beschichtet …'
+                                ? 'Boden wird saniert …'
                                 : 'Wird saniert …'}
                           </span>
                         )}
@@ -532,7 +519,7 @@ export default function App() {
                                 waehleVariante(foto, e.target.checked ? 'boden' : 'standard')
                               }
                             />
-                            Boden hellgrau
+                            Boden sanieren
                           </label>
                         )}
                       </figcaption>
@@ -558,7 +545,7 @@ export default function App() {
                               waehleVariante(gewaehlt, e.target.checked ? 'boden' : 'standard')
                             }
                           />
-                          Boden hellgrau
+                          Boden sanieren
                         </label>
                         {gewaehltesErgebnis?.status === 'fertig' && gewaehltesErgebnis.blob && (
                           <>
@@ -595,16 +582,11 @@ export default function App() {
                     </div>
 
                     {gewaehltesErgebnis?.status === 'fertig' && gewaehltesErgebnis.url ? (
-                      <>
-                        <Vergleich
-                          vorherUrl={gewaehlt.vorherUrl}
-                          nachherUrl={gewaehltesErgebnis.url}
-                          zuruecksetzenBei={`${gewaehlt.id}-${gewaehlt.variante}`}
-                        />
-                        <p className="fenster-hinweis">
-                          Regler ziehen: links mehr Nachher, rechts mehr Vorher
-                        </p>
-                      </>
+                      <Vergleich
+                        vorherUrl={gewaehlt.vorherUrl}
+                        nachherUrl={gewaehltesErgebnis.url}
+                        zuruecksetzenBei={`${gewaehlt.id}-${gewaehlt.variante}`}
+                      />
                     ) : gewaehltesErgebnis?.status === 'fehler' ? (
                       <p className="fenster-leer">
                         {gewaehltesErgebnis.fehler}
@@ -616,37 +598,31 @@ export default function App() {
                     ) : (
                       <p className="fenster-leer">
                         <span className="dreher dreher-dunkel" />
-                        {gewaehlt.variante === 'boden'
-                          ? 'Variante mit hellgrauem Boden wird erstellt …'
-                          : 'Wird saniert …'}
+                        {gewaehlt.variante === 'boden' ? 'Boden wird saniert …' : 'Wird saniert …'}
                       </p>
                     )}
 
-                    {gewaehlt.bestand && (
+                    {/* Diagnose nur fuer die Verwaltung (#einstellungen), nicht im Einsatz. */}
+                    {einstellungenOffen && gewaehlt.bestand && (
                       <details className="bestand">
-                        <summary>Erkannter Bestand, der erhalten bleiben sollte</summary>
+                        <summary>Erkannter Bestand</summary>
                         <pre>{gewaehlt.bestand}</pre>
                       </details>
                     )}
                   </>
                 ) : (
-                  <p className="fenster-leer">
-                    Sobald ein Foto gelesen ist, erscheint hier der Vergleich.
-                  </p>
+                  <p className="fenster-leer">Noch kein Foto ausgewählt.</p>
                 )}
               </div>
             </div>
 
-            <p className="rechts-hinweis">
-              Die Nachher-Bilder sind KI-Visualisierungen zur Veranschaulichung, kein zugesichertes
-              Sanierungsergebnis.
-            </p>
           </section>
         )}
       </main>
 
       <footer className="fusszeile">
-        Abdichtungstechnik Dipl.-Ing. Morscheck GmbH · Läuft vollständig im Browser, keine Anmeldung
+        Abdichtungstechnik Dipl.-Ing. Morscheck GmbH · KI-Visualisierung, kein zugesichertes
+        Sanierungsergebnis
       </footer>
 
       {zeigeIndex !== null && fertige[zeigeIndex] && (
