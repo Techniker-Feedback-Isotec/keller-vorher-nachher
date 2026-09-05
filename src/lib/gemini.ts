@@ -21,10 +21,15 @@ const BESTAND_URL = `https://generativelanguage.googleapis.com/v1beta/models/${B
 
 const BESTAND_PROMPT = [
   'Du siehst das Foto eines Kellerraums. Erstelle eine nüchterne Bestandsliste aller fest vorhandenen Elemente, damit ein Bildbearbeitungsprogramm sie unverändert erhalten kann.',
-  'Je Zeile ein Element mit Anzahl und Lage im Bild (links, Mitte, rechts; oben, unten), zum Beispiel: "1 Fenster, oben links, weißer Rahmen" oder "1 Rohr, senkrecht in der rechten Ecke, vom Boden bis zur Decke".',
-  'Erfasse: Fenster, Türen, Treppen, Nischen, Rohre und Leitungen mit ihrem Verlauf, Kabel, Kabelkanäle, Heizkörper, Zähler, Verteilerkästen, Ventile, Wasseranschlüsse, Steckdosen, Schalter, Lampen, Waschmaschine, Trockner, Heizung, Boiler, Schränke, Regale, Bodenabläufe.',
+  'Je Zeile genau ein Element mit Anzahl und Lage im Bild (links, Mitte, rechts; oben, unten), zum Beispiel: "1 Fenster, oben links, weißer Rahmen, Kellerfenster mit Gitter davor" oder "1 Rohr, senkrecht in der rechten Ecke, vom Boden bis zur Decke, grau".',
+  'Halte diese Reihenfolge strikt ein und lasse keine Gruppe aus, in der etwas vorhanden ist:',
+  '1. Fenster und Türen (auch kleine Kellerfenster, Fensternischen, Türöffnungen).',
+  '2. Rohre und Leitungen mit ihrem Verlauf (Wasser, Heizung, Abwasser, Lüftung), Kabel, Kabelkanäle.',
+  '3. Heizkörper, Zähler, Verteilerkästen, Ventile, Wasseranschlüsse, Steckdosen, Schalter.',
+  '4. Geräte und feste Möbel: Waschmaschine, Trockner, Heizung, Boiler, Schränke, Regale, Bodenabläufe.',
+  '5. Decke und Leuchten.',
   'Ignoriere lose Gegenstände wie Eimer, Flaschen, Kartons, Wäsche.',
-  'Keine Einleitung, keine Bewertung, keine Vorschläge, keine Überschrift. Höchstens 20 Zeilen. Deutsch.',
+  'Keine Einleitung, keine Bewertung, keine Vorschläge, keine Überschriften, keine Gruppennamen. Nur die Zeilen der Elemente. Höchstens 25 Zeilen. Deutsch.',
 ].join('\n')
 
 /** Zeilen fuer den Bildauftrag: der erkannte Bestand als Pflichtliste. */
@@ -66,8 +71,8 @@ const REGEL_ERHALTEN = [
 ]
 
 const REGEL_WAND_SANIERT = [
-  'Jede betroffene Wandfläche wird zu einer vollkommen ebenen, glatten, deckend weiß gestrichenen Fläche.',
-  'Es darf kein Mauerwerk, kein Stein-, Ziegel- oder Fugenmuster und keine Struktur mehr zu erkennen sein, die Wand ist frisch verputzt und weiß.',
+  'Jede betroffene Wandfläche wird zu einer vollkommen ebenen, glatt gespachtelten und deckend weiß gestrichenen Fläche, so homogen wie eine neue Trockenbauwand oder eine frisch verputzte Wand: einfarbig matt weiß, ohne jede Struktur, ohne Relief, ohne Textur.',
+  'Das ist KEIN weißer Anstrich über dem alten Mauerwerk. Steine, Ziegel, Fugen und Kanten des alten Mauerwerks sind unter neuem Putz vollständig verschwunden und dürfen nicht durchscheinen, auch nicht schwach, auch nicht als Schatten oder Raster.',
   'Sind diese Wände mit Rigips, Gipskartonplatten, Holzvertäfelung, Paneelen, Regalen an der Wand oder ähnlichen Verkleidungen bedeckt: Entferne diese Verkleidungen vollständig und zeige auch dort eine glatte, weiß gestrichene Wand.',
   'Sämtliche Feuchtigkeitsschäden, Schimmel, Stockflecken, Salzausblühungen, abblätternde Farbe, Risse und dunkle Flecken sind verschwunden.',
 ]
@@ -96,7 +101,7 @@ const REGEL_ALLGEMEIN = [
   'Der Raum wirkt hell, trocken und sauber, mit neutraler heller Ausleuchtung.',
   'Das Ergebnis muss wie ein echtes, unbearbeitetes Foto desselben Raums aussehen.',
   'Kein Text, kein Wasserzeichen.',
-  'Prüfe zum Schluss: Fenster, Türen, Rohre, Heizkörper und Geräte sind in Anzahl und Lage genau wie auf dem Foto. Nichts fehlt, nichts ist neu.',
+  'Prüfe zum Schluss: Fenster, Türen, Rohre, Heizkörper und Geräte sind in Anzahl und Lage genau wie auf dem Foto. Nichts fehlt, nichts ist neu. Die sanierten Wandflächen sind glatte, einfarbig weiße Flächen ohne erkennbares Stein- oder Fugenmuster.',
 ]
 
 /** Ohne Skizze: alle Waende und die Decke werden saniert. */
@@ -306,8 +311,9 @@ export async function erfasseBestand(base64Jpeg: string, schluessel: string): Pr
             ],
           },
         ],
-        // Nuechtern und wiederholbar, keine Kreativitaet.
-        generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
+        // Nuechtern und wiederholbar, keine Kreativitaet. Genug Platz, damit
+        // die Liste nicht mitten in den Rohren abbricht.
+        generationConfig: { temperature: 0.1, maxOutputTokens: 2000 },
       }),
     })
     if (!antwort.ok) return ''
@@ -318,12 +324,12 @@ export async function erfasseBestand(base64Jpeg: string, schluessel: string): Pr
       .map((p) => p.text ?? '')
       .join('\n')
       .trim()
-    // Nur Zeilen behalten, die wie Listeneintraege aussehen; Gerede raus.
+    // Aufzaehlungszeichen weg, Anzahl vorn behalten; Gerede und Gruppennamen raus.
     return text
       .split('\n')
-      .map((z) => z.replace(/^[-*•\d.)\s]+/, '').trim())
-      .filter((z) => z.length > 2)
-      .slice(0, 20)
+      .map((z) => z.replace(/^\s*[-*•]\s*/, '').replace(/^\d+[.)]\s+(?=\d)/, '').trim())
+      .filter((z) => z.length > 2 && !/^[A-ZÄÖÜa-zäöü ]+:$/.test(z))
+      .slice(0, 25)
       .join('\n')
   } catch {
     return ''
