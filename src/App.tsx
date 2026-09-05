@@ -4,7 +4,7 @@ import Vergleich from './Vergleich'
 import Viewer, { type ViewerFoto } from './Viewer'
 import { ladeNachherHerunter, teileNachherBild, teilenMoeglich } from './lib/share'
 import { bereiteBildVor, blobZuBase64 } from './lib/bild'
-import { GeminiFehler, saniereFoto } from './lib/gemini'
+import { GeminiFehler, erfasseBestand, saniereFoto } from './lib/gemini'
 import {
   MITGELIEFERTER_SCHLUESSEL,
   leseEigenenSchluessel,
@@ -27,6 +27,8 @@ type Foto = {
   fehler?: string
   /** true, wenn das Nachher-Bild mit Skizze erzeugt wurde. */
   mitSkizze?: boolean
+  /** Vom Textmodell erkannter Bestand, der als Pflichtliste in den Bildauftrag ging. */
+  bestand?: string
 }
 
 /**
@@ -123,13 +125,17 @@ export default function App() {
     const mitSkizze = skizzeRef.current.length > 0
     try {
       const base64 = await blobZuBase64(vorherBlob)
+      let bestand = ''
       const nachherBlob = await mitPlatz(async () => {
+        // Erst schauen, was da ist: Die Liste geht als Pflichtbestand in den
+        // Bildauftrag, damit Fenster und Rohre nicht verschwinden oder entstehen.
+        bestand = await erfasseBestand(base64, schluesselRef.current)
         try {
-          return await saniereFoto(base64, schluesselRef.current, skizzeRef.current.length ? skizzeRef.current : undefined)
+          return await saniereFoto(base64, schluesselRef.current, skizzeRef.current.length ? skizzeRef.current : undefined, bestand || undefined)
         } catch (fehler) {
           if (fehler instanceof GeminiFehler && fehler.wiederholbar) {
             await new Promise((r) => setTimeout(r, 4000))
-            return await saniereFoto(base64, schluesselRef.current, skizzeRef.current.length ? skizzeRef.current : undefined)
+            return await saniereFoto(base64, schluesselRef.current, skizzeRef.current.length ? skizzeRef.current : undefined, bestand || undefined)
           }
           // Ein auf diesem Geraet hinterlegter Schluessel, den Google ablehnt
           // (z. B. der gesperrte vom 04.09.2026), wird verworfen; danach gilt
@@ -146,7 +152,7 @@ export default function App() {
             setSchluesselEntwurf('')
             setSchluessel(MITGELIEFERTER_SCHLUESSEL)
             schluesselRef.current = MITGELIEFERTER_SCHLUESSEL
-            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, skizzeRef.current.length ? skizzeRef.current : undefined)
+            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, skizzeRef.current.length ? skizzeRef.current : undefined, bestand || undefined)
           }
           throw fehler
         }
@@ -156,6 +162,7 @@ export default function App() {
         nachherBlob,
         nachherUrl: URL.createObjectURL(nachherBlob),
         mitSkizze,
+        bestand: bestand || undefined,
       })
     } catch (fehler) {
       aktualisiere(id, {
@@ -591,6 +598,15 @@ export default function App() {
                   <p className="fenster-hinweis">
                     Regler ziehen: links mehr Nachher, rechts mehr Vorher
                   </p>
+                  {(() => {
+                    const bestand = fotos.find((f) => f.id === gewaehlt.id)?.bestand
+                    return bestand ? (
+                      <details className="bestand">
+                        <summary>Erkannter Bestand, der erhalten bleiben sollte</summary>
+                        <pre>{bestand}</pre>
+                      </details>
+                    ) : null
+                  })()}
                 </>
               ) : (
                 <p className="fenster-leer">

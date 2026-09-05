@@ -10,6 +10,35 @@ const MODELL = 'gemini-2.5-flash-image'
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODELL}:generateContent`
 
 /**
+ * Textmodell mit Bildverstaendnis fuer die Bestandsaufnahme vor der
+ * Bearbeitung (Yanns Entscheidung vom 05.09.2026, "Hebel 1"): Es listet auf,
+ * was auf dem Foto fest vorhanden ist, und diese Liste geht als Pflichtbestand
+ * in den Bildauftrag. So ist das Bildmodell auf DIESES Foto festgenagelt statt
+ * auf allgemeine Regeln. Kostet unter einem Cent je Foto.
+ */
+const BESTAND_MODELL = 'gemini-3.8-flash'
+const BESTAND_URL = `https://generativelanguage.googleapis.com/v1beta/models/${BESTAND_MODELL}:generateContent`
+
+const BESTAND_PROMPT = [
+  'Du siehst das Foto eines Kellerraums. Erstelle eine nüchterne Bestandsliste aller fest vorhandenen Elemente, damit ein Bildbearbeitungsprogramm sie unverändert erhalten kann.',
+  'Je Zeile ein Element mit Anzahl und Lage im Bild (links, Mitte, rechts; oben, unten), zum Beispiel: "1 Fenster, oben links, weißer Rahmen" oder "1 Rohr, senkrecht in der rechten Ecke, vom Boden bis zur Decke".',
+  'Erfasse: Fenster, Türen, Treppen, Nischen, Rohre und Leitungen mit ihrem Verlauf, Kabel, Kabelkanäle, Heizkörper, Zähler, Verteilerkästen, Ventile, Wasseranschlüsse, Steckdosen, Schalter, Lampen, Waschmaschine, Trockner, Heizung, Boiler, Schränke, Regale, Bodenabläufe.',
+  'Ignoriere lose Gegenstände wie Eimer, Flaschen, Kartons, Wäsche.',
+  'Keine Einleitung, keine Bewertung, keine Vorschläge, keine Überschrift. Höchstens 20 Zeilen. Deutsch.',
+].join('\n')
+
+/** Zeilen fuer den Bildauftrag: der erkannte Bestand als Pflichtliste. */
+function bestandBlock(bestand?: string): string[] {
+  const text = (bestand ?? '').trim()
+  if (!text) return []
+  return [
+    '',
+    'BESTAND DIESES FOTOS (jedes dieser Elemente bleibt in Anzahl, Lage und Form genau so):',
+    ...text.split('\n').map((z) => z.trim()).filter(Boolean),
+  ]
+}
+
+/**
  * Der Arbeitsauftrag an das Modell. Grundlage ist Yanns Beispielpaar vom
  * 01.09.2026 (Waschkueche), am 04./05.09.2026 nach seinen Tests geschaerft:
  * Waende werden glatte weisse Flaechen ohne Steinmuster, Verkleidungen wie
@@ -71,11 +100,13 @@ const REGEL_ALLGEMEIN = [
 ]
 
 /** Ohne Skizze: alle Waende und die Decke werden saniert. */
-const PROMPT = [
+function prompt(bestand?: string): string {
+  return [
   'Bearbeite dieses Foto eines Kellers.',
   'Zeige exakt denselben Raum nach einer professionellen Kellersanierung. Halte dich genau an diese Regeln:',
   '',
   ...REGEL_ERHALTEN,
+  ...bestandBlock(bestand),
   '',
   'WÄNDE:',
   ...REGEL_WAND_SANIERT,
@@ -91,6 +122,7 @@ const PROMPT = [
   '',
   ...REGEL_ALLGEMEIN,
 ].join('\n')
+}
 
 /**
  * Mit Skizze (Yanns Wunsch vom 05.09.2026): Die Skizze ist ein Foto desselben
@@ -100,7 +132,7 @@ const PROMPT = [
  * notierter Wanddurchbruch etwa wird von ISOTEC wieder geschlossen und darf
  * nicht erscheinen.
  */
-function promptMitSkizze(anzahlSeiten: number): string {
+function promptMitSkizze(anzahlSeiten: number, bestand?: string): string {
   const skizzenBilder =
     anzahlSeiten === 1
       ? 'BILD 2 ist eine Skizze: ein Foto desselben Kellers, auf dem mit farbigen Linien Bereiche umrandet wurden.'
@@ -114,6 +146,7 @@ function promptMitSkizze(anzahlSeiten: number): string {
     'Ordne die umrandeten Flächen den entsprechenden Wandflächen auf Bild 1 zu, auch wenn die Skizze aus einem etwas anderen Blickwinkel aufgenommen wurde. Ist eine Wandfläche auf Bild 1 in der Skizze nicht umrandet, bleibt sie unverändert.',
     '',
     ...REGEL_ERHALTEN,
+    ...bestandBlock(bestand),
     '',
     'INNERHALB DER UMRANDETEN WANDFLÄCHEN:',
     ...REGEL_WAND_SANIERT,
@@ -165,6 +198,7 @@ export async function saniereFoto(
   base64Jpeg: string,
   schluessel: string,
   skizzeBase64?: string[],
+  bestand?: string,
 ): Promise<Blob> {
   const skizzen = skizzeBase64 ?? []
   let antwort: Response
@@ -182,11 +216,11 @@ export async function saniereFoto(
               ? [
                   { inlineData: { mimeType: 'image/jpeg', data: base64Jpeg } },
                   ...skizzen.map((data) => ({ inlineData: { mimeType: 'image/jpeg', data } })),
-                  { text: promptMitSkizze(skizzen.length) },
+                  { text: promptMitSkizze(skizzen.length, bestand) },
                 ]
               : [
                   { inlineData: { mimeType: 'image/jpeg', data: base64Jpeg } },
-                  { text: PROMPT },
+                  { text: prompt(bestand) },
                 ],
           },
         ],
@@ -248,4 +282,52 @@ export async function saniereFoto(
   const bytes = new Uint8Array(roh.length)
   for (let i = 0; i < roh.length; i++) bytes[i] = roh.charCodeAt(i)
   return new Blob([bytes], { type: bild.inlineData.mimeType ?? 'image/png' })
+}
+
+/**
+ * Bestandsaufnahme: Was ist auf dem Foto fest vorhanden? Liefert eine Liste
+ * mit einer Zeile je Element oder einen leeren Text, wenn der Aufruf scheitert.
+ * Wirft absichtlich nie, denn die Bearbeitung soll auch ohne Bestand laufen.
+ */
+export async function erfasseBestand(base64Jpeg: string, schluessel: string): Promise<string> {
+  const abbruch = new AbortController()
+  const wecker = window.setTimeout(() => abbruch.abort(), 25_000)
+  try {
+    const antwort = await fetch(BESTAND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': schluessel },
+      signal: abbruch.signal,
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: base64Jpeg } },
+              { text: BESTAND_PROMPT },
+            ],
+          },
+        ],
+        // Nuechtern und wiederholbar, keine Kreativitaet.
+        generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
+      }),
+    })
+    if (!antwort.ok) return ''
+    const json = (await antwort.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+    }
+    const text = (json.candidates?.[0]?.content?.parts ?? [])
+      .map((p) => p.text ?? '')
+      .join('\n')
+      .trim()
+    // Nur Zeilen behalten, die wie Listeneintraege aussehen; Gerede raus.
+    return text
+      .split('\n')
+      .map((z) => z.replace(/^[-*•\d.)\s]+/, '').trim())
+      .filter((z) => z.length > 2)
+      .slice(0, 20)
+      .join('\n')
+  } catch {
+    return ''
+  } finally {
+    window.clearTimeout(wecker)
+  }
 }
