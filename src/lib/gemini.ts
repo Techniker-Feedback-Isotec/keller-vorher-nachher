@@ -1,12 +1,18 @@
 /**
- * Anbindung an Google Gemini (Modell gemini-2.5-flash-image).
+ * Anbindung an Google Gemini.
  *
  * Der Aufruf geht direkt aus dem Browser an die Google-API, es gibt keinen
- * eigenen Server. Der API-Schluessel wird einmal je Geraet hinterlegt und
- * liegt im localStorage (siehe schluessel.ts).
+ * eigenen Server. Der Schluessel kommt aus schluessel.ts.
  */
 
-const MODELL = 'gemini-2.5-flash-image'
+/**
+ * Bildmodell. Seit 05.09.2026 das Pro-Modell (Entscheidung Yann): Das
+ * Flash-Modell liess unter dem weissen Putz das Ziegelmuster durchscheinen
+ * und hielt Vorgaben zu Fenstern und Rohren schlechter ein. Pro kostet etwa
+ * das Dreifache je Bild, dafuer folgt es dem Auftrag deutlich strenger.
+ * Vorgaenger: 'gemini-2.5-flash-image'.
+ */
+const MODELL = 'gemini-3-pro-image'
 const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODELL}:generateContent`
 
 /**

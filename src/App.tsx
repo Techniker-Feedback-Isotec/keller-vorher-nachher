@@ -310,7 +310,9 @@ export default function App() {
               der Adresse erreichbar. Der Schlüssel wird mit dem Programm ausgeliefert: Wer die
               Seite öffnet, kann sofort arbeiten, ohne etwas einzurichten. Das Feld unten
               überschreibt ihn nur auf diesem Gerät, leer lassen und speichern nimmt wieder den
-              mitgelieferten. Kosten: etwa 4 Cent je Foto.
+              mitgelieferten. Bildmodell ist das Pro-Modell von Gemini; die Kosten je Foto
+              liegen etwa beim Dreifachen des Flash-Modells, der Verbrauch ist in AI Studio
+              einsehbar.
             </p>
             <p className="section-hint">
               Gerade in Benutzung:{' '}
