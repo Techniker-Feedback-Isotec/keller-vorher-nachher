@@ -29,8 +29,11 @@ type Foto = {
   mitSkizze?: boolean
 }
 
-/** Die Skizze mit den umrandeten Sanierungsbereichen, gilt fuer alle Fotos. */
-type Skizze = { url: string; base64: string; name: string }
+/**
+ * Die Skizze mit den umrandeten Sanierungsbereichen, gilt fuer alle Fotos.
+ * Ein Bild oder ein PDF; jede PDF-Seite wird zu einem eigenen Bild.
+ */
+type Skizze = { urls: string[]; base64: string[]; name: string }
 
 /**
  * Hoechstens zwei Anfragen gleichzeitig an Gemini: schont das Kontingent des
@@ -69,8 +72,8 @@ export default function App() {
   const schluesselRef = useRef('')
   schluesselRef.current = schluessel
   // Die Skizze muss auch in laufenden Verarbeitungen die aktuelle sein.
-  const skizzeRef = useRef('')
-  skizzeRef.current = skizze?.base64 ?? ''
+  const skizzeRef = useRef<string[]>([])
+  skizzeRef.current = skizze?.base64 ?? []
 
   useEffect(() => {
     const demo = window.location.hash.includes('demo')
@@ -117,16 +120,16 @@ export default function App() {
       return
     }
     aktualisiere(id, { status: 'laeuft', fehler: undefined })
-    const mitSkizze = Boolean(skizzeRef.current)
+    const mitSkizze = skizzeRef.current.length > 0
     try {
       const base64 = await blobZuBase64(vorherBlob)
       const nachherBlob = await mitPlatz(async () => {
         try {
-          return await saniereFoto(base64, schluesselRef.current, skizzeRef.current || undefined)
+          return await saniereFoto(base64, schluesselRef.current, skizzeRef.current.length ? skizzeRef.current : undefined)
         } catch (fehler) {
           if (fehler instanceof GeminiFehler && fehler.wiederholbar) {
             await new Promise((r) => setTimeout(r, 4000))
-            return await saniereFoto(base64, schluesselRef.current, skizzeRef.current || undefined)
+            return await saniereFoto(base64, schluesselRef.current, skizzeRef.current.length ? skizzeRef.current : undefined)
           }
           // Ein auf diesem Geraet hinterlegter Schluessel, den Google ablehnt
           // (z. B. der gesperrte vom 04.09.2026), wird verworfen; danach gilt
@@ -143,7 +146,7 @@ export default function App() {
             setSchluesselEntwurf('')
             setSchluessel(MITGELIEFERTER_SCHLUESSEL)
             schluesselRef.current = MITGELIEFERTER_SCHLUESSEL
-            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, skizzeRef.current || undefined)
+            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, skizzeRef.current.length ? skizzeRef.current : undefined)
           }
           throw fehler
         }
@@ -185,20 +188,29 @@ export default function App() {
   /** Nimmt die Skizze mit den umrandeten Bereichen an; sie gilt fuer alle Fotos. */
   async function nimmSkizze(datei: File) {
     try {
-      const { blob } = await bereiteBildVor(datei)
-      const base64 = await blobZuBase64(blob)
+      const { ladeSkizze } = await import('./lib/skizze')
+      const blobs = await ladeSkizze(datei)
+      const base64 = await Promise.all(blobs.map(blobZuBase64))
       setSkizze((alt) => {
-        if (alt) URL.revokeObjectURL(alt.url)
-        return { url: URL.createObjectURL(blob), base64, name: datei.name.replace(/\.[^.]+$/, '') }
+        alt?.urls.forEach((u) => URL.revokeObjectURL(u))
+        return {
+          urls: blobs.map((b) => URL.createObjectURL(b)),
+          base64,
+          name: datei.name.replace(/\.[^.]+$/, ''),
+        }
       })
-    } catch {
-      window.alert('Die Skizze konnte nicht gelesen werden.')
+    } catch (fehler) {
+      window.alert(
+        fehler instanceof Error && fehler.message
+          ? `Die Skizze konnte nicht gelesen werden: ${fehler.message}`
+          : 'Die Skizze konnte nicht gelesen werden.',
+      )
     }
   }
 
   function entferneSkizze() {
     setSkizze((alt) => {
-      if (alt) URL.revokeObjectURL(alt.url)
+      alt?.urls.forEach((u) => URL.revokeObjectURL(u))
       return null
     })
   }
@@ -380,9 +392,12 @@ export default function App() {
           <div className="skizze-zeile">
             {skizze ? (
               <>
-                <img className="skizze-vorschau" src={skizze.url} alt="Skizze" />
+                <img className="skizze-vorschau" src={skizze.urls[0]} alt="Skizze" />
                 <div className="skizze-text">
-                  <strong>Skizze: {skizze.name}</strong>
+                  <strong>
+                    Skizze: {skizze.name}
+                    {skizze.urls.length > 1 ? ` (${skizze.urls.length} Seiten)` : ''}
+                  </strong>
                   <span>
                     Saniert werden nur die auf der Skizze umrandeten Wandflächen, alles andere
                     bleibt. Gilt für alle Fotos.
@@ -402,8 +417,8 @@ export default function App() {
                 <div className="skizze-text">
                   <strong>Skizze mit Sanierungsbereichen (optional)</strong>
                   <span>
-                    Ein Foto, auf dem die zu sanierenden Wandflächen umrandet sind. Dann wird nur
-                    dort saniert; Texte und Maße auf der Skizze werden nicht beachtet.
+                    Ein Foto oder PDF, auf dem die zu sanierenden Wandflächen umrandet sind. Dann
+                    wird nur dort saniert; Texte und Maße auf der Skizze werden nicht beachtet.
                   </span>
                 </div>
                 <button className="btn btn-rand btn-klein" onClick={() => skizzeFeld.current?.click()}>
@@ -415,7 +430,7 @@ export default function App() {
           <input
             ref={skizzeFeld}
             type="file"
-            accept="image/*,.heic,.heif"
+            accept="image/*,.heic,.heif,.pdf,application/pdf"
             hidden
             onChange={(e) => {
               const datei = e.target.files?.[0]
