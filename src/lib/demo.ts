@@ -6,7 +6,7 @@
  * Grossansicht sofort ausprobieren lassen.
  */
 
-function male(nachher: boolean, variante = 0): Promise<Blob> {
+function male(nachher: boolean, variante = 0, bodenHellgrau = false): Promise<Blob> {
   const hochkant = variante % 2 === 1
   const b = hochkant ? 900 : 1200
   const h = hochkant ? 1200 : 900
@@ -47,16 +47,21 @@ function male(nachher: boolean, variante = 0): Promise<Blob> {
     }
   }
 
-  // Boden bleibt in beiden Bildern gleich
-  ctx.fillStyle = '#6e675f'
-  ctx.fillRect(0, h - 240, b, 240)
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)'
-  ctx.lineWidth = 3
-  for (let x = 0; x < b; x += 150) {
-    ctx.beginPath()
-    ctx.moveTo(x, h - 240)
-    ctx.lineTo(x - 60, h)
-    ctx.stroke()
+  // Boden: bleibt gleich, ausser in der Variante "Boden hellgrau"
+  if (nachher && bodenHellgrau) {
+    ctx.fillStyle = '#cfcbc4'
+    ctx.fillRect(0, h - 240, b, 240)
+  } else {
+    ctx.fillStyle = '#6e675f'
+    ctx.fillRect(0, h - 240, b, 240)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)'
+    ctx.lineWidth = 3
+    for (let x = 0; x < b; x += 150) {
+      ctx.beginPath()
+      ctx.moveTo(x, h - 240)
+      ctx.lineTo(x - 60, h)
+      ctx.stroke()
+    }
   }
 
   // Rohr an der Decke bleibt ebenfalls
@@ -68,6 +73,9 @@ function male(nachher: boolean, variante = 0): Promise<Blob> {
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.9))
 }
 
-export async function demoBilder(variante = 0): Promise<{ vorher: Blob; nachher: Blob }> {
-  return { vorher: await male(false, variante), nachher: await male(true, variante) }
+export async function demoBilder(
+  variante = 0,
+  bodenHellgrau = false,
+): Promise<{ vorher: Blob; nachher: Blob }> {
+  return { vorher: await male(false, variante), nachher: await male(true, variante, bodenHellgrau) }
 }

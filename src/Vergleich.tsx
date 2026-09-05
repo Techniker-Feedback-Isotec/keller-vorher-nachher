@@ -12,15 +12,23 @@ type Props = {
  *
  * Links liegt das alte Foto, rechts das sanierte. Zieht man den Griff nach
  * links, wird mehr vom Nachher-Bild sichtbar, nach rechts mehr vom Vorher-Bild.
+ * Start bei 90 Prozent Vorher.
  * Wird sowohl im Fenster auf der Seite als auch in der Vollbildansicht benutzt.
  */
+/**
+ * Startstellung des Reglers (Yann, 05.09.2026): erst fast nur das alte Foto
+ * zeigen, das Neue schaut nur am rechten Rand hervor. Beim Kunden zieht man
+ * den Regler dann bewusst nach links und enthuellt die Sanierung.
+ */
+const START_POSITION = 90
+
 export default function Vergleich({ vorherUrl, nachherUrl, zuruecksetzenBei }: Props) {
-  const [position, setPosition] = useState(50)
+  const [position, setPosition] = useState(START_POSITION)
   const flaeche = useRef<HTMLDivElement>(null)
   const zieht = useRef(false)
 
   useEffect(() => {
-    setPosition(50)
+    setPosition(START_POSITION)
   }, [zuruecksetzenBei])
 
   const setzeAusEreignis = useCallback((clientX: number) => {

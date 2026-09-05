@@ -14,28 +14,44 @@ import {
   verteilLink,
 } from './lib/schluessel'
 
-type Status = 'liest' | 'wartet' | 'laeuft' | 'fertig' | 'fehler'
+/**
+ * Je Foto gibt es zwei Erstellvarianten (Yann, 05.09.2026):
+ * - standard: Waende und Decke saniert, Boden bleibt in seiner Substanz.
+ * - boden:    zusaetzlich der Boden vollflaechig hellgrau beschichtet.
+ * Beide Ergebnisse bleiben erhalten, man wechselt per Haekchen dazwischen.
+ */
+type Variante = 'standard' | 'boden'
+
+type Ergebnis = {
+  status: 'laeuft' | 'fertig' | 'fehler'
+  url?: string
+  blob?: Blob
+  fehler?: string
+}
 
 type Foto = {
   id: string
   name: string
   vorherUrl: string
   vorherBlob: Blob
-  nachherUrl?: string
-  nachherBlob?: Blob
-  status: Status
+  /** Zustand des Vorher-Bilds: wird gelesen, wartet auf Schluessel, oder bereit. */
+  status: 'liest' | 'wartet' | 'bereit' | 'lesefehler'
   fehler?: string
-  /** true, wenn das Nachher-Bild mit Skizze erzeugt wurde. */
-  mitSkizze?: boolean
-  /** Vom Textmodell erkannter Bestand, der als Pflichtliste in den Bildauftrag ging. */
+  ergebnisse: Partial<Record<Variante, Ergebnis>>
+  /** Welche Variante gerade gezeigt wird. */
+  variante: Variante
+  /** Vom Textmodell erkannter Bestand; wird einmal je Foto ermittelt und fuer beide Varianten genutzt. */
   bestand?: string
 }
 
-/**
- * Die Skizze mit den umrandeten Sanierungsbereichen, gilt fuer alle Fotos.
- * Ein Bild oder ein PDF; jede PDF-Seite wird zu einem eigenen Bild.
- */
-type Skizze = { urls: string[]; base64: string[]; name: string }
+const VARIANTEN_NAME: Record<Variante, string> = {
+  standard: 'Standard',
+  boden: 'Boden hellgrau',
+}
+
+function aktuell(foto: Foto): Ergebnis | undefined {
+  return foto.ergebnisse[foto.variante]
+}
 
 /**
  * Hoechstens zwei Anfragen gleichzeitig an Gemini: schont das Kontingent des
@@ -68,14 +84,12 @@ export default function App() {
   const [gesichert, setGesichert] = useState(false)
   const [zeigeIndex, setZeigeIndex] = useState<number | null>(null)
   const [ziehtDatei, setZiehtDatei] = useState(false)
-  const [skizze, setSkizze] = useState<Skizze | null>(null)
   const dateiFeld = useRef<HTMLInputElement>(null)
-  const skizzeFeld = useRef<HTMLInputElement>(null)
   const schluesselRef = useRef('')
   schluesselRef.current = schluessel
-  // Die Skizze muss auch in laufenden Verarbeitungen die aktuelle sein.
-  const skizzeRef = useRef<string[]>([])
-  skizzeRef.current = skizze?.base64 ?? []
+  // Laufende Verarbeitungen brauchen den aktuellen Stand (z. B. den Bestand).
+  const fotosRef = useRef<Foto[]>([])
+  fotosRef.current = fotos
 
   useEffect(() => {
     const demo = window.location.hash.includes('demo')
@@ -93,7 +107,8 @@ export default function App() {
         const { demoBilder } = await import('./lib/demo')
         const namen = ['Beispiel Waschküche', 'Beispiel Kellerflur', 'Beispiel Heizungsraum']
         for (const [nummer, name] of namen.entries()) {
-          const { vorher, nachher } = await demoBilder(nummer)
+          const { vorher, nachher } = await demoBilder(nummer, false)
+          const { nachher: nachherBoden } = await demoBilder(nummer, true)
           setFotos((liste) => [
             ...liste,
             {
@@ -101,9 +116,12 @@ export default function App() {
               name,
               vorherUrl: URL.createObjectURL(vorher),
               vorherBlob: vorher,
-              nachherUrl: URL.createObjectURL(nachher),
-              nachherBlob: nachher,
-              status: 'fertig',
+              status: 'bereit',
+              variante: 'standard',
+              ergebnisse: {
+                standard: { status: 'fertig', url: URL.createObjectURL(nachher), blob: nachher },
+                boden: { status: 'fertig', url: URL.createObjectURL(nachherBoden), blob: nachherBoden },
+              },
             },
           ])
         }
@@ -115,27 +133,45 @@ export default function App() {
     setFotos((liste) => liste.map((f) => (f.id === id ? { ...f, ...aenderung } : f)))
   }
 
-  /** Schickt ein Foto an Gemini; ein wiederholbarer Fehler bekommt einen zweiten Versuch. */
-  async function verarbeite(id: string, vorherBlob: Blob) {
+  function setzeErgebnis(id: string, variante: Variante, ergebnis: Ergebnis) {
+    setFotos((liste) =>
+      liste.map((f) => {
+        if (f.id !== id) return f
+        const alt = f.ergebnisse[variante]
+        if (alt?.url && alt.url !== ergebnis.url) URL.revokeObjectURL(alt.url)
+        return { ...f, ergebnisse: { ...f.ergebnisse, [variante]: ergebnis } }
+      }),
+    )
+  }
+
+  /**
+   * Erzeugt eine Variante fuer ein Foto. Ein wiederholbarer Fehler bekommt
+   * einen zweiten Versuch; der Bestand wird je Foto nur einmal ermittelt.
+   */
+  async function verarbeite(id: string, vorherBlob: Blob, variante: Variante) {
     if (!schluesselRef.current) {
       aktualisiere(id, { status: 'wartet' })
       return
     }
-    aktualisiere(id, { status: 'laeuft', fehler: undefined })
-    const mitSkizze = skizzeRef.current.length > 0
+    setzeErgebnis(id, variante, { status: 'laeuft' })
     try {
       const base64 = await blobZuBase64(vorherBlob)
-      let bestand = ''
-      const nachherBlob = await mitPlatz(async () => {
+      const bodenHellgrau = variante === 'boden'
+      const blob = await mitPlatz(async () => {
         // Erst schauen, was da ist: Die Liste geht als Pflichtbestand in den
         // Bildauftrag, damit Fenster und Rohre nicht verschwinden oder entstehen.
-        bestand = await erfasseBestand(base64, schluesselRef.current)
+        let bestand = fotosRef.current.find((f) => f.id === id)?.bestand ?? ''
+        if (!bestand) {
+          bestand = await erfasseBestand(base64, schluesselRef.current)
+          if (bestand) aktualisiere(id, { bestand })
+        }
+        const optionen = { bestand: bestand || undefined, bodenHellgrau }
         try {
-          return await saniereFoto(base64, schluesselRef.current, skizzeRef.current.length ? skizzeRef.current : undefined, bestand || undefined)
+          return await saniereFoto(base64, schluesselRef.current, optionen)
         } catch (fehler) {
           if (fehler instanceof GeminiFehler && fehler.wiederholbar) {
             await new Promise((r) => setTimeout(r, 4000))
-            return await saniereFoto(base64, schluesselRef.current, skizzeRef.current.length ? skizzeRef.current : undefined, bestand || undefined)
+            return await saniereFoto(base64, schluesselRef.current, optionen)
           }
           // Ein auf diesem Geraet hinterlegter Schluessel, den Google ablehnt
           // (z. B. der gesperrte vom 04.09.2026), wird verworfen; danach gilt
@@ -152,20 +188,14 @@ export default function App() {
             setSchluesselEntwurf('')
             setSchluessel(MITGELIEFERTER_SCHLUESSEL)
             schluesselRef.current = MITGELIEFERTER_SCHLUESSEL
-            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, skizzeRef.current.length ? skizzeRef.current : undefined, bestand || undefined)
+            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, optionen)
           }
           throw fehler
         }
       })
-      aktualisiere(id, {
-        status: 'fertig',
-        nachherBlob,
-        nachherUrl: URL.createObjectURL(nachherBlob),
-        mitSkizze,
-        bestand: bestand || undefined,
-      })
+      setzeErgebnis(id, variante, { status: 'fertig', blob, url: URL.createObjectURL(blob) })
     } catch (fehler) {
-      aktualisiere(id, {
+      setzeErgebnis(id, variante, {
         status: 'fehler',
         fehler: fehler instanceof Error ? fehler.message : 'Unbekannter Fehler',
       })
@@ -179,61 +209,42 @@ export default function App() {
       const name = datei.name.replace(/\.[^.]+$/, '')
       setFotos((liste) => [
         ...liste,
-        { id, name, vorherUrl: '', vorherBlob: datei, status: 'liest' },
+        {
+          id,
+          name,
+          vorherUrl: '',
+          vorherBlob: datei,
+          status: 'liest',
+          variante: 'standard',
+          ergebnisse: {},
+        },
       ])
       try {
         const { blob } = await bereiteBildVor(datei)
-        const vorherUrl = URL.createObjectURL(blob)
-        aktualisiere(id, { vorherBlob: blob, vorherUrl })
-        void verarbeite(id, blob)
+        aktualisiere(id, { vorherBlob: blob, vorherUrl: URL.createObjectURL(blob), status: 'bereit' })
+        void verarbeite(id, blob, 'standard')
       } catch {
-        aktualisiere(id, { status: 'fehler', fehler: 'Foto konnte nicht gelesen werden.' })
+        aktualisiere(id, { status: 'lesefehler', fehler: 'Foto konnte nicht gelesen werden.' })
       }
     }
   }
 
-  /** Nimmt die Skizze mit den umrandeten Bereichen an; sie gilt fuer alle Fotos. */
-  async function nimmSkizze(datei: File) {
-    try {
-      const { ladeSkizze } = await import('./lib/skizze')
-      const blobs = await ladeSkizze(datei)
-      const base64 = await Promise.all(blobs.map(blobZuBase64))
-      setSkizze((alt) => {
-        alt?.urls.forEach((u) => URL.revokeObjectURL(u))
-        return {
-          urls: blobs.map((b) => URL.createObjectURL(b)),
-          base64,
-          name: datei.name.replace(/\.[^.]+$/, ''),
-        }
-      })
-    } catch (fehler) {
-      window.alert(
-        fehler instanceof Error && fehler.message
-          ? `Die Skizze konnte nicht gelesen werden: ${fehler.message}`
-          : 'Die Skizze konnte nicht gelesen werden.',
-      )
-    }
+  /** Haekchen "Boden hellgrau": Variante wechseln und bei Bedarf erst erzeugen. */
+  function waehleVariante(foto: Foto, variante: Variante) {
+    aktualisiere(foto.id, { variante })
+    if (!foto.ergebnisse[variante]) void verarbeite(foto.id, foto.vorherBlob, variante)
   }
 
-  function entferneSkizze() {
-    setSkizze((alt) => {
-      alt?.urls.forEach((u) => URL.revokeObjectURL(u))
-      return null
-    })
-  }
-
-  /** Ein fertiges oder gescheitertes Foto noch einmal bearbeiten, z. B. nach Aendern der Skizze. */
+  /** Die gerade gezeigte Variante noch einmal erzeugen. */
   function bearbeiteErneut(foto: Foto) {
-    if (foto.nachherUrl) URL.revokeObjectURL(foto.nachherUrl)
-    aktualisiere(foto.id, { nachherUrl: undefined, nachherBlob: undefined, mitSkizze: undefined })
-    void verarbeite(foto.id, foto.vorherBlob)
+    void verarbeite(foto.id, foto.vorherBlob, foto.variante)
   }
 
   function entferne(id: string) {
     setFotos((liste) => {
       const foto = liste.find((f) => f.id === id)
       if (foto?.vorherUrl) URL.revokeObjectURL(foto.vorherUrl)
-      if (foto?.nachherUrl) URL.revokeObjectURL(foto.nachherUrl)
+      for (const e of Object.values(foto?.ergebnisse ?? {})) if (e?.url) URL.revokeObjectURL(e.url)
       return liste.filter((f) => f.id !== id)
     })
   }
@@ -250,7 +261,10 @@ export default function App() {
     if (wert) {
       schluesselRef.current = wert
       for (const foto of fotos) {
-        if (foto.status === 'wartet') void verarbeite(foto.id, foto.vorherBlob)
+        if (foto.status === 'wartet') {
+          aktualisiere(foto.id, { status: 'bereit' })
+          void verarbeite(foto.id, foto.vorherBlob, foto.variante)
+        }
       }
     }
   }
@@ -265,26 +279,39 @@ export default function App() {
     }
   }
 
-  const fertige: ViewerFoto[] = fotos
-    .filter((f) => f.status === 'fertig' && f.nachherUrl && f.nachherBlob)
-    .map((f) => ({
-      id: f.id,
-      name: f.name,
-      vorherUrl: f.vorherUrl,
-      nachherUrl: f.nachherUrl!,
-      nachherBlob: f.nachherBlob!,
-    }))
+  // Im Fenster gezeigt wird das gewaehlte Foto, sonst das erste mit fertigem
+  // Ergebnis, sonst das erste bereite. Die Vollbildansicht kennt nur fertige.
+  const anzeigbar = fotos.filter((f) => f.status === 'bereit')
+  const gewaehlt =
+    anzeigbar.find((f) => f.id === auswahlId) ??
+    anzeigbar.find((f) => aktuell(f)?.status === 'fertig') ??
+    anzeigbar[0]
+  const gewaehltesErgebnis = gewaehlt ? aktuell(gewaehlt) : undefined
 
-  // Immer ein Foto im Vergleichsfenster zeigen: das zuletzt gewaehlte, sonst
-  // das erste fertige. Wird das gewaehlte entfernt, rueckt automatisch nach.
-  const gewaehlt = fertige.find((f) => f.id === auswahlId) ?? fertige[0]
+  const fertige: ViewerFoto[] = anzeigbar
+    .filter((f) => aktuell(f)?.status === 'fertig')
+    .map((f) => {
+      const e = aktuell(f)!
+      return {
+        id: f.id,
+        name: f.variante === 'boden' ? `${f.name} (Boden hellgrau)` : f.name,
+        vorherUrl: f.vorherUrl,
+        nachherUrl: e.url!,
+        nachherBlob: e.blob!,
+      }
+    })
+
   useEffect(() => {
     if (gewaehlt && gewaehlt.id !== auswahlId) setAuswahlId(gewaehlt.id)
     if (!gewaehlt && auswahlId) setAuswahlId(null)
   }, [gewaehlt, auswahlId])
   useEffect(() => {
     setGesichert(false)
-  }, [gewaehlt?.id])
+  }, [gewaehlt?.id, gewaehlt?.variante])
+
+  function dateiname(foto: Foto): string {
+    return foto.variante === 'boden' ? `${foto.name} Boden hellgrau` : foto.name
+  }
 
   return (
     <>
@@ -382,8 +409,9 @@ export default function App() {
             </p>
             <p className="ablage-klein">
               Jedes Foto wird automatisch bearbeitet: Wände und Decke erscheinen frisch saniert und
-              weiß. Zur Bearbeitung wird das Foto an Google (Gemini) übertragen; das Tool selbst
-              speichert nichts.
+              weiß, der Boden bleibt. Mit dem Häkchen „Boden hellgrau" am Foto entsteht zusätzlich
+              eine Variante mit hellgrau beschichtetem Boden. Zur Bearbeitung wird das Foto an
+              Google (Gemini) übertragen; das Tool selbst speichert nichts.
             </p>
           </div>
           <input
@@ -397,56 +425,6 @@ export default function App() {
               e.target.value = ''
             }}
           />
-
-          <div className="skizze-zeile">
-            {skizze ? (
-              <>
-                <img className="skizze-vorschau" src={skizze.urls[0]} alt="Skizze" />
-                <div className="skizze-text">
-                  <strong>
-                    Skizze: {skizze.name}
-                    {skizze.urls.length > 1 ? ` (${skizze.urls.length} Seiten)` : ''}
-                  </strong>
-                  <span>
-                    Saniert werden nur die auf der Skizze umrandeten Wandflächen, alles andere
-                    bleibt. Gilt für alle Fotos.
-                  </span>
-                </div>
-                <div className="fenster-knoepfe">
-                  <button className="btn btn-rand btn-klein" onClick={() => skizzeFeld.current?.click()}>
-                    Ersetzen
-                  </button>
-                  <button className="btn btn-rand btn-klein" onClick={entferneSkizze}>
-                    Entfernen
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="skizze-text">
-                  <strong>Skizze mit Sanierungsbereichen (optional)</strong>
-                  <span>
-                    Ein Foto oder PDF, auf dem die zu sanierenden Wandflächen umrandet sind. Dann
-                    wird nur dort saniert; Texte und Maße auf der Skizze werden nicht beachtet.
-                  </span>
-                </div>
-                <button className="btn btn-rand btn-klein" onClick={() => skizzeFeld.current?.click()}>
-                  Skizze auswählen
-                </button>
-              </>
-            )}
-          </div>
-          <input
-            ref={skizzeFeld}
-            type="file"
-            accept="image/*,.heic,.heif,.pdf,application/pdf"
-            hidden
-            onChange={(e) => {
-              const datei = e.target.files?.[0]
-              if (datei) void nimmSkizze(datei)
-              e.target.value = ''
-            }}
-          />
         </section>
 
         {fotos.length > 0 && (
@@ -455,167 +433,208 @@ export default function App() {
               <span className="step">2</span>Vorher-Nachher
             </h2>
             <p className="section-hint">
-              Foto in der Übersicht antippen, rechts erscheint der Vergleich.
-              {skizze && fotos.some((f) => f.status === 'fertig' && !f.mitSkizze) && (
-                <>
-                  {' '}
-                  <button
-                    className="btn btn-rand btn-klein"
-                    onClick={() => {
-                      for (const foto of fotos) {
-                        if (foto.status === 'fertig' && !foto.mitSkizze) bearbeiteErneut(foto)
-                      }
-                    }}
-                  >
-                    Fotos ohne Skizze neu bearbeiten
-                  </button>
-                </>
-              )}
+              Foto in der Übersicht antippen, rechts erscheint der Vergleich. Das Häkchen am Foto
+              wechselt zur Variante mit hellgrauem Boden und erzeugt sie beim ersten Mal.
             </p>
             <div className="uebersicht">
-            <div className="galerie">
-              {fotos.map((foto) => {
-                const istGewaehlt = gewaehlt?.id === foto.id
-                const klassen = ['kachel']
-                if (foto.status === 'fertig') klassen.push('klickbar')
-                if (istGewaehlt) klassen.push('gewaehlt')
-                return (
-                  <figure
-                    key={foto.id}
-                    className={klassen.join(' ')}
-                    onClick={() => {
-                      if (foto.status === 'fertig') setAuswahlId(foto.id)
-                    }}
-                  >
-                    <div className="kachel-bild">
-                      {foto.vorherUrl && <img src={foto.vorherUrl} alt={`${foto.name} vorher`} />}
-                      {foto.status === 'fertig' && foto.nachherUrl && (
-                        <>
-                          <img
-                            src={foto.nachherUrl}
-                            alt={`${foto.name} nachher`}
-                            style={{ clipPath: 'inset(0 0 0 50%)' }}
-                          />
-                          <span className="kachel-teiler" />
-                        </>
-                      )}
-                      {(foto.status === 'laeuft' || foto.status === 'liest') && (
-                        <span className="kachel-schleier">
-                          <span className="dreher" />
-                          {foto.status === 'laeuft' ? 'Wird saniert …' : 'Wird gelesen …'}
-                        </span>
-                      )}
-                      {foto.status === 'wartet' && (
-                        <span className="kachel-schleier">Wartet auf Schlüssel</span>
-                      )}
-                      {foto.status === 'fehler' && (
-                        <span className="kachel-schleier kachel-fehler">
-                          {foto.fehler}
+              <div className="galerie">
+                {fotos.map((foto) => {
+                  const ergebnis = aktuell(foto)
+                  const istGewaehlt = gewaehlt?.id === foto.id
+                  const klassen = ['kachel']
+                  if (foto.status === 'bereit') klassen.push('klickbar')
+                  if (istGewaehlt) klassen.push('gewaehlt')
+                  return (
+                    <figure
+                      key={foto.id}
+                      className={klassen.join(' ')}
+                      onClick={() => {
+                        if (foto.status === 'bereit') setAuswahlId(foto.id)
+                      }}
+                    >
+                      <div className="kachel-bild">
+                        {foto.vorherUrl && <img src={foto.vorherUrl} alt={`${foto.name} vorher`} />}
+                        {ergebnis?.status === 'fertig' && ergebnis.url && (
+                          <>
+                            <img
+                              src={ergebnis.url}
+                              alt={`${foto.name} nachher`}
+                              style={{ clipPath: 'inset(0 0 0 50%)' }}
+                            />
+                            <span className="kachel-teiler" />
+                          </>
+                        )}
+                        {(foto.status === 'liest' || ergebnis?.status === 'laeuft') && (
+                          <span className="kachel-schleier">
+                            <span className="dreher" />
+                            {foto.status === 'liest'
+                              ? 'Wird gelesen …'
+                              : foto.variante === 'boden'
+                                ? 'Boden wird beschichtet …'
+                                : 'Wird saniert …'}
+                          </span>
+                        )}
+                        {foto.status === 'wartet' && (
+                          <span className="kachel-schleier">Wartet auf Schlüssel</span>
+                        )}
+                        {(foto.status === 'lesefehler' || ergebnis?.status === 'fehler') && (
+                          <span className="kachel-schleier kachel-fehler">
+                            {foto.status === 'lesefehler' ? foto.fehler : ergebnis?.fehler}
+                            {foto.status !== 'lesefehler' && (
+                              <button
+                                className="btn btn-hell btn-klein"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  bearbeiteErneut(foto)
+                                }}
+                              >
+                                Erneut versuchen
+                              </button>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      <figcaption>
+                        <div className="kachel-zeile">
+                          <span className="kachel-name" title={foto.name}>
+                            {foto.name}
+                          </span>
+                          {(ergebnis?.status === 'fertig' || ergebnis?.status === 'fehler') && (
+                            <button
+                              className="kachel-entfernen"
+                              aria-label="Diese Variante erneut bearbeiten"
+                              title="Erneut bearbeiten"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                bearbeiteErneut(foto)
+                              }}
+                            >
+                              ↻
+                            </button>
+                          )}
                           <button
-                            className="btn btn-hell btn-klein"
+                            className="kachel-entfernen"
+                            aria-label="Foto entfernen"
                             onClick={(e) => {
                               e.stopPropagation()
-                              void verarbeite(foto.id, foto.vorherBlob)
+                              entferne(foto.id)
                             }}
                           >
-                            Erneut versuchen
+                            ✕
                           </button>
-                        </span>
-                      )}
-                    </div>
-                    <figcaption>
-                      <span className="kachel-name" title={foto.name}>
-                        {foto.mitSkizze && <span className="kachel-marke">Skizze</span>}
-                        {foto.name}
-                      </span>
-                      {(foto.status === 'fertig' || foto.status === 'fehler') && (
-                        <button
-                          className="kachel-entfernen"
-                          aria-label="Foto erneut bearbeiten"
-                          title="Erneut bearbeiten"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            bearbeiteErneut(foto)
-                          }}
-                        >
-                          ↻
-                        </button>
-                      )}
-                      <button
-                        className="kachel-entfernen"
-                        aria-label="Foto entfernen"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          entferne(foto.id)
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </figcaption>
-                  </figure>
-                )
-              })}
-            </div>
+                        </div>
+                        {foto.status === 'bereit' && (
+                          <label className="kachel-option" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={foto.variante === 'boden'}
+                              onChange={(e) =>
+                                waehleVariante(foto, e.target.checked ? 'boden' : 'standard')
+                              }
+                            />
+                            Boden hellgrau
+                          </label>
+                        )}
+                      </figcaption>
+                    </figure>
+                  )
+                })}
+              </div>
 
-            <div className="vergleich-fenster">
-              {gewaehlt ? (
-                <>
-                  <div className="fenster-kopf">
-                    <strong className="fenster-name" title={gewaehlt.name}>
-                      {gewaehlt.name}
-                    </strong>
-                    <div className="fenster-knoepfe">
-                      <button
-                        className="btn btn-rand btn-klein"
-                        onClick={() => {
-                          ladeNachherHerunter(gewaehlt.nachherBlob, gewaehlt.name)
-                          setGesichert(true)
-                        }}
-                      >
-                        {gesichert ? '✓ Heruntergeladen' : 'Herunterladen'}
-                      </button>
-                      {teilenMoeglich() && (
-                        <button
-                          className="btn btn-rand btn-klein"
-                          onClick={() => void teileNachherBild(gewaehlt.nachherBlob, gewaehlt.name)}
-                        >
-                          In Fotos sichern
-                        </button>
-                      )}
-                      <button
-                        className="btn btn-rand btn-klein"
-                        onClick={() =>
-                          setZeigeIndex(fertige.findIndex((f) => f.id === gewaehlt.id))
-                        }
-                      >
-                        Vollbild
-                      </button>
+              <div className="vergleich-fenster">
+                {gewaehlt ? (
+                  <>
+                    <div className="fenster-kopf">
+                      <strong className="fenster-name" title={gewaehlt.name}>
+                        {gewaehlt.name}
+                        <span className="kachel-marke">{VARIANTEN_NAME[gewaehlt.variante]}</span>
+                      </strong>
+                      <div className="fenster-knoepfe">
+                        <label className="kachel-option fenster-option">
+                          <input
+                            type="checkbox"
+                            checked={gewaehlt.variante === 'boden'}
+                            onChange={(e) =>
+                              waehleVariante(gewaehlt, e.target.checked ? 'boden' : 'standard')
+                            }
+                          />
+                          Boden hellgrau
+                        </label>
+                        {gewaehltesErgebnis?.status === 'fertig' && gewaehltesErgebnis.blob && (
+                          <>
+                            <button
+                              className="btn btn-rand btn-klein"
+                              onClick={() => {
+                                ladeNachherHerunter(gewaehltesErgebnis.blob!, dateiname(gewaehlt))
+                                setGesichert(true)
+                              }}
+                            >
+                              {gesichert ? '✓ Heruntergeladen' : 'Herunterladen'}
+                            </button>
+                            {teilenMoeglich() && (
+                              <button
+                                className="btn btn-rand btn-klein"
+                                onClick={() =>
+                                  void teileNachherBild(gewaehltesErgebnis.blob!, dateiname(gewaehlt))
+                                }
+                              >
+                                In Fotos sichern
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-rand btn-klein"
+                              onClick={() =>
+                                setZeigeIndex(fertige.findIndex((f) => f.id === gewaehlt.id))
+                              }
+                            >
+                              Vollbild
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <Vergleich
-                    vorherUrl={gewaehlt.vorherUrl}
-                    nachherUrl={gewaehlt.nachherUrl}
-                    zuruecksetzenBei={gewaehlt.id}
-                  />
-                  <p className="fenster-hinweis">
-                    Regler ziehen: links mehr Nachher, rechts mehr Vorher
-                  </p>
-                  {(() => {
-                    const bestand = fotos.find((f) => f.id === gewaehlt.id)?.bestand
-                    return bestand ? (
+
+                    {gewaehltesErgebnis?.status === 'fertig' && gewaehltesErgebnis.url ? (
+                      <>
+                        <Vergleich
+                          vorherUrl={gewaehlt.vorherUrl}
+                          nachherUrl={gewaehltesErgebnis.url}
+                          zuruecksetzenBei={`${gewaehlt.id}-${gewaehlt.variante}`}
+                        />
+                        <p className="fenster-hinweis">
+                          Regler ziehen: links mehr Nachher, rechts mehr Vorher
+                        </p>
+                      </>
+                    ) : gewaehltesErgebnis?.status === 'fehler' ? (
+                      <p className="fenster-leer">
+                        {gewaehltesErgebnis.fehler}
+                        <br />
+                        <button className="btn btn-rand btn-klein" onClick={() => bearbeiteErneut(gewaehlt)}>
+                          Erneut versuchen
+                        </button>
+                      </p>
+                    ) : (
+                      <p className="fenster-leer">
+                        <span className="dreher dreher-dunkel" />
+                        {gewaehlt.variante === 'boden'
+                          ? 'Variante mit hellgrauem Boden wird erstellt …'
+                          : 'Wird saniert …'}
+                      </p>
+                    )}
+
+                    {gewaehlt.bestand && (
                       <details className="bestand">
                         <summary>Erkannter Bestand, der erhalten bleiben sollte</summary>
-                        <pre>{bestand}</pre>
+                        <pre>{gewaehlt.bestand}</pre>
                       </details>
-                    ) : null
-                  })()}
-                </>
-              ) : (
-                <p className="fenster-leer">
-                  Sobald ein Foto fertig bearbeitet ist, erscheint hier der Vergleich.
-                </p>
-              )}
-            </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="fenster-leer">
+                    Sobald ein Foto gelesen ist, erscheint hier der Vergleich.
+                  </p>
+                )}
+              </div>
             </div>
 
             <p className="rechts-hinweis">
