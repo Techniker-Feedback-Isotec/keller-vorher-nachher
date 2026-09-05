@@ -25,7 +25,12 @@ type Foto = {
   nachherBlob?: Blob
   status: Status
   fehler?: string
+  /** true, wenn das Nachher-Bild mit Skizze erzeugt wurde. */
+  mitSkizze?: boolean
 }
+
+/** Die Skizze mit den umrandeten Sanierungsbereichen, gilt fuer alle Fotos. */
+type Skizze = { url: string; base64: string; name: string }
 
 /**
  * Hoechstens zwei Anfragen gleichzeitig an Gemini: schont das Kontingent des
@@ -58,9 +63,14 @@ export default function App() {
   const [gesichert, setGesichert] = useState(false)
   const [zeigeIndex, setZeigeIndex] = useState<number | null>(null)
   const [ziehtDatei, setZiehtDatei] = useState(false)
+  const [skizze, setSkizze] = useState<Skizze | null>(null)
   const dateiFeld = useRef<HTMLInputElement>(null)
+  const skizzeFeld = useRef<HTMLInputElement>(null)
   const schluesselRef = useRef('')
   schluesselRef.current = schluessel
+  // Die Skizze muss auch in laufenden Verarbeitungen die aktuelle sein.
+  const skizzeRef = useRef('')
+  skizzeRef.current = skizze?.base64 ?? ''
 
   useEffect(() => {
     const demo = window.location.hash.includes('demo')
@@ -107,15 +117,16 @@ export default function App() {
       return
     }
     aktualisiere(id, { status: 'laeuft', fehler: undefined })
+    const mitSkizze = Boolean(skizzeRef.current)
     try {
       const base64 = await blobZuBase64(vorherBlob)
       const nachherBlob = await mitPlatz(async () => {
         try {
-          return await saniereFoto(base64, schluesselRef.current)
+          return await saniereFoto(base64, schluesselRef.current, skizzeRef.current || undefined)
         } catch (fehler) {
           if (fehler instanceof GeminiFehler && fehler.wiederholbar) {
             await new Promise((r) => setTimeout(r, 4000))
-            return await saniereFoto(base64, schluesselRef.current)
+            return await saniereFoto(base64, schluesselRef.current, skizzeRef.current || undefined)
           }
           // Ein auf diesem Geraet hinterlegter Schluessel, den Google ablehnt
           // (z. B. der gesperrte vom 04.09.2026), wird verworfen; danach gilt
@@ -132,7 +143,7 @@ export default function App() {
             setSchluesselEntwurf('')
             setSchluessel(MITGELIEFERTER_SCHLUESSEL)
             schluesselRef.current = MITGELIEFERTER_SCHLUESSEL
-            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL)
+            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, skizzeRef.current || undefined)
           }
           throw fehler
         }
@@ -141,6 +152,7 @@ export default function App() {
         status: 'fertig',
         nachherBlob,
         nachherUrl: URL.createObjectURL(nachherBlob),
+        mitSkizze,
       })
     } catch (fehler) {
       aktualisiere(id, {
@@ -168,6 +180,34 @@ export default function App() {
         aktualisiere(id, { status: 'fehler', fehler: 'Foto konnte nicht gelesen werden.' })
       }
     }
+  }
+
+  /** Nimmt die Skizze mit den umrandeten Bereichen an; sie gilt fuer alle Fotos. */
+  async function nimmSkizze(datei: File) {
+    try {
+      const { blob } = await bereiteBildVor(datei)
+      const base64 = await blobZuBase64(blob)
+      setSkizze((alt) => {
+        if (alt) URL.revokeObjectURL(alt.url)
+        return { url: URL.createObjectURL(blob), base64, name: datei.name.replace(/\.[^.]+$/, '') }
+      })
+    } catch {
+      window.alert('Die Skizze konnte nicht gelesen werden.')
+    }
+  }
+
+  function entferneSkizze() {
+    setSkizze((alt) => {
+      if (alt) URL.revokeObjectURL(alt.url)
+      return null
+    })
+  }
+
+  /** Ein fertiges oder gescheitertes Foto noch einmal bearbeiten, z. B. nach Aendern der Skizze. */
+  function bearbeiteErneut(foto: Foto) {
+    if (foto.nachherUrl) URL.revokeObjectURL(foto.nachherUrl)
+    aktualisiere(foto.id, { nachherUrl: undefined, nachherBlob: undefined, mitSkizze: undefined })
+    void verarbeite(foto.id, foto.vorherBlob)
   }
 
   function entferne(id: string) {
@@ -336,6 +376,53 @@ export default function App() {
               e.target.value = ''
             }}
           />
+
+          <div className="skizze-zeile">
+            {skizze ? (
+              <>
+                <img className="skizze-vorschau" src={skizze.url} alt="Skizze" />
+                <div className="skizze-text">
+                  <strong>Skizze: {skizze.name}</strong>
+                  <span>
+                    Saniert werden nur die auf der Skizze umrandeten Wandflächen, alles andere
+                    bleibt. Gilt für alle Fotos.
+                  </span>
+                </div>
+                <div className="fenster-knoepfe">
+                  <button className="btn btn-rand btn-klein" onClick={() => skizzeFeld.current?.click()}>
+                    Ersetzen
+                  </button>
+                  <button className="btn btn-rand btn-klein" onClick={entferneSkizze}>
+                    Entfernen
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="skizze-text">
+                  <strong>Skizze mit Sanierungsbereichen (optional)</strong>
+                  <span>
+                    Ein Foto, auf dem die zu sanierenden Wandflächen umrandet sind. Dann wird nur
+                    dort saniert; Texte und Maße auf der Skizze werden nicht beachtet.
+                  </span>
+                </div>
+                <button className="btn btn-rand btn-klein" onClick={() => skizzeFeld.current?.click()}>
+                  Skizze auswählen
+                </button>
+              </>
+            )}
+          </div>
+          <input
+            ref={skizzeFeld}
+            type="file"
+            accept="image/*,.heic,.heif"
+            hidden
+            onChange={(e) => {
+              const datei = e.target.files?.[0]
+              if (datei) void nimmSkizze(datei)
+              e.target.value = ''
+            }}
+          />
         </section>
 
         {fotos.length > 0 && (
@@ -345,6 +432,21 @@ export default function App() {
             </h2>
             <p className="section-hint">
               Foto in der Übersicht antippen, rechts erscheint der Vergleich.
+              {skizze && fotos.some((f) => f.status === 'fertig' && !f.mitSkizze) && (
+                <>
+                  {' '}
+                  <button
+                    className="btn btn-rand btn-klein"
+                    onClick={() => {
+                      for (const foto of fotos) {
+                        if (foto.status === 'fertig' && !foto.mitSkizze) bearbeiteErneut(foto)
+                      }
+                    }}
+                  >
+                    Fotos ohne Skizze neu bearbeiten
+                  </button>
+                </>
+              )}
             </p>
             <div className="uebersicht">
             <div className="galerie">
@@ -399,8 +501,22 @@ export default function App() {
                     </div>
                     <figcaption>
                       <span className="kachel-name" title={foto.name}>
+                        {foto.mitSkizze && <span className="kachel-marke">Skizze</span>}
                         {foto.name}
                       </span>
+                      {(foto.status === 'fertig' || foto.status === 'fehler') && (
+                        <button
+                          className="kachel-entfernen"
+                          aria-label="Foto erneut bearbeiten"
+                          title="Erneut bearbeiten"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            bearbeiteErneut(foto)
+                          }}
+                        >
+                          ↻
+                        </button>
+                      )}
                       <button
                         className="kachel-entfernen"
                         aria-label="Foto entfernen"

@@ -252,6 +252,54 @@ main {
   margin: 0 auto !important;
 }
 
+/* Skizze mit Sanierungsbereichen */
+.skizze-zeile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--grey);
+  border-radius: 10px;
+  background: var(--light);
+}
+
+.skizze-vorschau {
+  width: 72px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  display: block;
+}
+
+.skizze-text {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.88rem;
+}
+
+.skizze-text span {
+  color: #7a6f68;
+  font-size: 0.82rem;
+}
+
+.kachel-marke {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--brown);
+  color: var(--white);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+
 /* Übersicht: links die Auswahl, rechts der Vergleich */
 .uebersicht {
   display: grid;
