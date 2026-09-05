@@ -603,6 +603,12 @@ main {
   cursor: default;
 }
 
+/* Knopf rechts in der Abschnittsueberschrift (PDF erstellen) */
+.h2-aktion {
+  margin-left: auto;
+  font-weight: 400;
+}
+
 .upload-hinweis {
   margin: 10px 0 0;
   font-size: 0.85rem;

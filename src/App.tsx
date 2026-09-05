@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import logo from './assets/isotec-logo.png'
 import Vergleich from './Vergleich'
 import Viewer, { type ViewerFoto } from './Viewer'
-import { ladeNachherHerunter, teileNachherBild, teilenMoeglich } from './lib/share'
+import { ladeNachherHerunter, speichereDatei, teileNachherBild, teilenMoeglich } from './lib/share'
 import { bereiteBildVor, blobZuBase64 } from './lib/bild'
 import { GeminiFehler, erfasseBestand, saniereFoto } from './lib/gemini'
 import {
@@ -120,6 +120,8 @@ export default function App() {
   const [zeigeIndex, setZeigeIndex] = useState<number | null>(null)
   const [ziehtDatei, setZiehtDatei] = useState(false)
   const [uploadHinweis, setUploadHinweis] = useState('')
+  const [pdfLaeuft, setPdfLaeuft] = useState(false)
+  const [pdfFehler, setPdfFehler] = useState('')
   const dateiFeld = useRef<HTMLInputElement>(null)
   const schluesselRef = useRef('')
   schluesselRef.current = schluessel
@@ -353,6 +355,37 @@ export default function App() {
     }
   }
 
+  /**
+   * PDF "ISOTEC Sanierungsvorschau": Titelseite, dann je Foto eine Seite mit
+   * Vorher und Nachher in genau der Variante, die gerade ausgewaehlt ist.
+   */
+  async function erstellePdf() {
+    const eintraege = fotos
+      .filter((f) => f.status === 'bereit' && aktuell(f)?.status === 'fertig')
+      .map((f) => ({
+        name: f.name,
+        variante: bezeichnung(f.optionen, f.entfernt),
+        vorher: f.vorherBlob,
+        nachher: aktuell(f)!.blob!,
+      }))
+    if (eintraege.length === 0) return
+    setPdfLaeuft(true)
+    setPdfFehler('')
+    try {
+      const [{ erzeugeSanierungsvorschauPdf }, logoAntwort] = await Promise.all([
+        import('./lib/pdf'),
+        fetch(logo),
+      ])
+      const logoPng = new Uint8Array(await logoAntwort.arrayBuffer())
+      const pdf = await erzeugeSanierungsvorschauPdf(eintraege, logoPng)
+      speichereDatei(pdf, 'ISOTEC Sanierungsvorschau.pdf')
+    } catch (fehler) {
+      setPdfFehler(fehler instanceof Error ? fehler.message : 'PDF konnte nicht erstellt werden.')
+    } finally {
+      setPdfLaeuft(false)
+    }
+  }
+
   async function kopiereVerteilLink() {
     try {
       await navigator.clipboard.writeText(verteilLink(schluessel))
@@ -583,7 +616,16 @@ export default function App() {
           <section className="card">
             <h2>
               <span className="step">2</span>Vorher-Nachher
+              <button
+                className="btn btn-rot btn-klein h2-aktion"
+                disabled={pdfLaeuft || fertige.length === 0}
+                onClick={() => void erstellePdf()}
+                title="PDF mit allen fertigen Fotos in der jeweils gewählten Variante"
+              >
+                {pdfLaeuft ? 'PDF wird erstellt …' : `PDF erstellen (${fertige.length})`}
+              </button>
             </h2>
+            {pdfFehler && <p className="upload-hinweis">{pdfFehler}</p>}
             <div className="uebersicht">
               <div className="galerie">
                 {fotos.map((foto) => {
