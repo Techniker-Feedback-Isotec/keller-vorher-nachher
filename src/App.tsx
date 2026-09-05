@@ -229,7 +229,7 @@ export default function App() {
     }
   }
 
-  /** Haekchen "Boden hellgrau": Variante wechseln und bei Bedarf erst erzeugen. */
+  /** Haekchen "Boden sanieren": Variante wechseln und bei Bedarf erst erzeugen. */
   function waehleVariante(foto: Foto, variante: Variante) {
     aktualisiere(foto.id, { variante })
     if (!foto.ergebnisse[variante]) void verarbeite(foto.id, foto.vorherBlob, variante)

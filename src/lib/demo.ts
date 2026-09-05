@@ -47,7 +47,7 @@ function male(nachher: boolean, variante = 0, bodenHellgrau = false): Promise<Bl
     }
   }
 
-  // Boden: bleibt gleich, ausser in der Variante "Boden hellgrau"
+  // Boden: bleibt gleich, ausser in der Variante "Boden sanieren" (hellgrau beschichtet)
   if (nachher && bodenHellgrau) {
     ctx.fillStyle = '#cfcbc4'
     ctx.fillRect(0, h - 240, b, 240)
