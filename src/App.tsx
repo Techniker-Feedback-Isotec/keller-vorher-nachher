@@ -15,12 +15,28 @@ import {
 } from './lib/schluessel'
 
 /**
- * Je Foto gibt es zwei Erstellvarianten (Yann, 05.09.2026):
- * - standard: Waende und Decke saniert, Boden bleibt in seiner Substanz.
- * - boden:    zusaetzlich der Boden vollflaechig hellgrau beschichtet.
- * Beide Ergebnisse bleiben erhalten, man wechselt per Haekchen dazwischen.
+ * Je Foto lassen sich zwei Optionen anhaken (Yann, 05.09.2026):
+ * - boden:  der Boden wird vollflaechig hellgrau saniert statt nur gesaeubert.
+ * - moebel: passende Einrichtung zeigt den moeglichen Nutzen des Raums.
+ * Jede Kombination wird nur einmal erzeugt und bleibt erhalten; man wechselt
+ * per Haekchen frei zwischen den fertigen Ergebnissen.
  */
-type Variante = 'standard' | 'boden'
+type Optionen = { boden: boolean; moebel: boolean }
+
+const STANDARD: Optionen = { boden: false, moebel: false }
+
+/** Schluessel, unter dem das Ergebnis einer Kombination abgelegt wird. */
+function kombination(o: Optionen): string {
+  return `${o.boden ? 'boden' : 'standard'}${o.moebel ? '+moebel' : ''}`
+}
+
+/** Lesbare Bezeichnung der Kombination fuer Marke und Dateinamen. */
+function bezeichnung(o: Optionen): string {
+  if (o.boden && o.moebel) return 'Boden saniert, möbliert'
+  if (o.boden) return 'Boden saniert'
+  if (o.moebel) return 'Möbliert'
+  return 'Standard'
+}
 
 type Ergebnis = {
   status: 'laeuft' | 'fertig' | 'fehler'
@@ -37,20 +53,16 @@ type Foto = {
   /** Zustand des Vorher-Bilds: wird gelesen, wartet auf Schluessel, oder bereit. */
   status: 'liest' | 'wartet' | 'bereit' | 'lesefehler'
   fehler?: string
-  ergebnisse: Partial<Record<Variante, Ergebnis>>
-  /** Welche Variante gerade gezeigt wird. */
-  variante: Variante
-  /** Vom Textmodell erkannter Bestand; wird einmal je Foto ermittelt und fuer beide Varianten genutzt. */
+  /** Ergebnisse je Kombination, Schluessel siehe kombination(). */
+  ergebnisse: Record<string, Ergebnis>
+  /** Welche Kombination gerade gezeigt wird. */
+  optionen: Optionen
+  /** Vom Textmodell erkannter Bestand; einmal je Foto ermittelt, fuer alle Kombinationen genutzt. */
   bestand?: string
 }
 
-const VARIANTEN_NAME: Record<Variante, string> = {
-  standard: 'Standard',
-  boden: 'Boden sanieren',
-}
-
 function aktuell(foto: Foto): Ergebnis | undefined {
-  return foto.ergebnisse[foto.variante]
+  return foto.ergebnisse[kombination(foto.optionen)]
 }
 
 /**
@@ -117,7 +129,7 @@ export default function App() {
               vorherUrl: URL.createObjectURL(vorher),
               vorherBlob: vorher,
               status: 'bereit',
-              variante: 'standard',
+              optionen: STANDARD,
               ergebnisse: {
                 standard: { status: 'fertig', url: URL.createObjectURL(nachher), blob: nachher },
                 boden: { status: 'fertig', url: URL.createObjectURL(nachherBoden), blob: nachherBoden },
@@ -133,30 +145,30 @@ export default function App() {
     setFotos((liste) => liste.map((f) => (f.id === id ? { ...f, ...aenderung } : f)))
   }
 
-  function setzeErgebnis(id: string, variante: Variante, ergebnis: Ergebnis) {
+  function setzeErgebnis(id: string, schluesselKombi: string, ergebnis: Ergebnis) {
     setFotos((liste) =>
       liste.map((f) => {
         if (f.id !== id) return f
-        const alt = f.ergebnisse[variante]
+        const alt = f.ergebnisse[schluesselKombi]
         if (alt?.url && alt.url !== ergebnis.url) URL.revokeObjectURL(alt.url)
-        return { ...f, ergebnisse: { ...f.ergebnisse, [variante]: ergebnis } }
+        return { ...f, ergebnisse: { ...f.ergebnisse, [schluesselKombi]: ergebnis } }
       }),
     )
   }
 
   /**
-   * Erzeugt eine Variante fuer ein Foto. Ein wiederholbarer Fehler bekommt
+   * Erzeugt eine Kombination fuer ein Foto. Ein wiederholbarer Fehler bekommt
    * einen zweiten Versuch; der Bestand wird je Foto nur einmal ermittelt.
    */
-  async function verarbeite(id: string, vorherBlob: Blob, variante: Variante) {
+  async function verarbeite(id: string, vorherBlob: Blob, optionen: Optionen) {
     if (!schluesselRef.current) {
       aktualisiere(id, { status: 'wartet' })
       return
     }
-    setzeErgebnis(id, variante, { status: 'laeuft' })
+    const kombi = kombination(optionen)
+    setzeErgebnis(id, kombi, { status: 'laeuft' })
     try {
       const base64 = await blobZuBase64(vorherBlob)
-      const bodenHellgrau = variante === 'boden'
       const blob = await mitPlatz(async () => {
         // Erst schauen, was da ist: Die Liste geht als Pflichtbestand in den
         // Bildauftrag, damit Fenster und Rohre nicht verschwinden oder entstehen.
@@ -165,13 +177,17 @@ export default function App() {
           bestand = await erfasseBestand(base64, schluesselRef.current)
           if (bestand) aktualisiere(id, { bestand })
         }
-        const optionen = { bestand: bestand || undefined, bodenHellgrau }
+        const auftrag = {
+          bestand: bestand || undefined,
+          bodenHellgrau: optionen.boden,
+          moeblieren: optionen.moebel,
+        }
         try {
-          return await saniereFoto(base64, schluesselRef.current, optionen)
+          return await saniereFoto(base64, schluesselRef.current, auftrag)
         } catch (fehler) {
           if (fehler instanceof GeminiFehler && fehler.wiederholbar) {
             await new Promise((r) => setTimeout(r, 4000))
-            return await saniereFoto(base64, schluesselRef.current, optionen)
+            return await saniereFoto(base64, schluesselRef.current, auftrag)
           }
           // Ein auf diesem Geraet hinterlegter Schluessel, den Google ablehnt
           // (z. B. der gesperrte vom 04.09.2026), wird verworfen; danach gilt
@@ -188,14 +204,14 @@ export default function App() {
             setSchluesselEntwurf('')
             setSchluessel(MITGELIEFERTER_SCHLUESSEL)
             schluesselRef.current = MITGELIEFERTER_SCHLUESSEL
-            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, optionen)
+            return await saniereFoto(base64, MITGELIEFERTER_SCHLUESSEL, auftrag)
           }
           throw fehler
         }
       })
-      setzeErgebnis(id, variante, { status: 'fertig', blob, url: URL.createObjectURL(blob) })
+      setzeErgebnis(id, kombi, { status: 'fertig', blob, url: URL.createObjectURL(blob) })
     } catch (fehler) {
-      setzeErgebnis(id, variante, {
+      setzeErgebnis(id, kombi, {
         status: 'fehler',
         fehler: fehler instanceof Error ? fehler.message : 'Unbekannter Fehler',
       })
@@ -215,36 +231,37 @@ export default function App() {
           vorherUrl: '',
           vorherBlob: datei,
           status: 'liest',
-          variante: 'standard',
+          optionen: STANDARD,
           ergebnisse: {},
         },
       ])
       try {
         const { blob } = await bereiteBildVor(datei)
         aktualisiere(id, { vorherBlob: blob, vorherUrl: URL.createObjectURL(blob), status: 'bereit' })
-        void verarbeite(id, blob, 'standard')
+        void verarbeite(id, blob, STANDARD)
       } catch {
         aktualisiere(id, { status: 'lesefehler', fehler: 'Foto konnte nicht gelesen werden.' })
       }
     }
   }
 
-  /** Haekchen "Boden sanieren": Variante wechseln und bei Bedarf erst erzeugen. */
-  function waehleVariante(foto: Foto, variante: Variante) {
-    aktualisiere(foto.id, { variante })
-    if (!foto.ergebnisse[variante]) void verarbeite(foto.id, foto.vorherBlob, variante)
+  /** Haekchen umschalten: Kombination wechseln und bei Bedarf erst erzeugen. */
+  function schalteOption(foto: Foto, teil: keyof Optionen, wert: boolean) {
+    const optionen = { ...foto.optionen, [teil]: wert }
+    aktualisiere(foto.id, { optionen })
+    if (!foto.ergebnisse[kombination(optionen)]) void verarbeite(foto.id, foto.vorherBlob, optionen)
   }
 
-  /** Die gerade gezeigte Variante noch einmal erzeugen. */
+  /** Die gerade gezeigte Kombination noch einmal erzeugen. */
   function bearbeiteErneut(foto: Foto) {
-    void verarbeite(foto.id, foto.vorherBlob, foto.variante)
+    void verarbeite(foto.id, foto.vorherBlob, foto.optionen)
   }
 
   function entferne(id: string) {
     setFotos((liste) => {
       const foto = liste.find((f) => f.id === id)
       if (foto?.vorherUrl) URL.revokeObjectURL(foto.vorherUrl)
-      for (const e of Object.values(foto?.ergebnisse ?? {})) if (e?.url) URL.revokeObjectURL(e.url)
+      for (const e of Object.values(foto?.ergebnisse ?? {})) if (e.url) URL.revokeObjectURL(e.url)
       return liste.filter((f) => f.id !== id)
     })
   }
@@ -263,7 +280,7 @@ export default function App() {
       for (const foto of fotos) {
         if (foto.status === 'wartet') {
           aktualisiere(foto.id, { status: 'bereit' })
-          void verarbeite(foto.id, foto.vorherBlob, foto.variante)
+          void verarbeite(foto.id, foto.vorherBlob, foto.optionen)
         }
       }
     }
@@ -287,14 +304,16 @@ export default function App() {
     anzeigbar.find((f) => aktuell(f)?.status === 'fertig') ??
     anzeigbar[0]
   const gewaehltesErgebnis = gewaehlt ? aktuell(gewaehlt) : undefined
+  const gewaehlteKombi = gewaehlt ? kombination(gewaehlt.optionen) : ''
 
   const fertige: ViewerFoto[] = anzeigbar
     .filter((f) => aktuell(f)?.status === 'fertig')
     .map((f) => {
       const e = aktuell(f)!
+      const zusatz = bezeichnung(f.optionen)
       return {
         id: f.id,
-        name: f.variante === 'boden' ? `${f.name} (Boden saniert)` : f.name,
+        name: zusatz === 'Standard' ? f.name : `${f.name} (${zusatz})`,
         vorherUrl: f.vorherUrl,
         nachherUrl: e.url!,
         nachherBlob: e.blob!,
@@ -307,10 +326,41 @@ export default function App() {
   }, [gewaehlt, auswahlId])
   useEffect(() => {
     setGesichert(false)
-  }, [gewaehlt?.id, gewaehlt?.variante])
+  }, [gewaehlt?.id, gewaehlteKombi])
 
   function dateiname(foto: Foto): string {
-    return foto.variante === 'boden' ? `${foto.name} Boden saniert` : foto.name
+    const zusatz = bezeichnung(foto.optionen)
+    return zusatz === 'Standard' ? foto.name : `${foto.name} ${zusatz.replace(', ', ' ')}`
+  }
+
+  function statustext(foto: Foto): string {
+    if (foto.optionen.moebel) return 'Wird eingerichtet …'
+    if (foto.optionen.boden) return 'Boden wird saniert …'
+    return 'Wird saniert …'
+  }
+
+  /** Die beiden Haekchen, an der Kachel und im Fenster gleich. */
+  function optionsHaken(foto: Foto, klasse: string) {
+    return (
+      <div className={klasse} onClick={(e) => e.stopPropagation()}>
+        <label className="kachel-option">
+          <input
+            type="checkbox"
+            checked={foto.optionen.boden}
+            onChange={(e) => schalteOption(foto, 'boden', e.target.checked)}
+          />
+          Boden sanieren
+        </label>
+        <label className="kachel-option">
+          <input
+            type="checkbox"
+            checked={foto.optionen.moebel}
+            onChange={(e) => schalteOption(foto, 'moebel', e.target.checked)}
+          />
+          Möblieren
+        </label>
+      </div>
+    )
   }
 
   return (
@@ -454,11 +504,7 @@ export default function App() {
                         {(foto.status === 'liest' || ergebnis?.status === 'laeuft') && (
                           <span className="kachel-schleier">
                             <span className="dreher" />
-                            {foto.status === 'liest'
-                              ? 'Wird gelesen …'
-                              : foto.variante === 'boden'
-                                ? 'Boden wird saniert …'
-                                : 'Wird saniert …'}
+                            {foto.status === 'liest' ? 'Wird gelesen …' : statustext(foto)}
                           </span>
                         )}
                         {foto.status === 'wartet' && (
@@ -510,18 +556,7 @@ export default function App() {
                             ✕
                           </button>
                         </div>
-                        {foto.status === 'bereit' && (
-                          <label className="kachel-option" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={foto.variante === 'boden'}
-                              onChange={(e) =>
-                                waehleVariante(foto, e.target.checked ? 'boden' : 'standard')
-                              }
-                            />
-                            Boden sanieren
-                          </label>
-                        )}
+                        {foto.status === 'bereit' && optionsHaken(foto, 'kachel-optionen')}
                       </figcaption>
                     </figure>
                   )
@@ -534,19 +569,10 @@ export default function App() {
                     <div className="fenster-kopf">
                       <strong className="fenster-name" title={gewaehlt.name}>
                         {gewaehlt.name}
-                        <span className="kachel-marke">{VARIANTEN_NAME[gewaehlt.variante]}</span>
+                        <span className="kachel-marke">{bezeichnung(gewaehlt.optionen)}</span>
                       </strong>
                       <div className="fenster-knoepfe">
-                        <label className="kachel-option fenster-option">
-                          <input
-                            type="checkbox"
-                            checked={gewaehlt.variante === 'boden'}
-                            onChange={(e) =>
-                              waehleVariante(gewaehlt, e.target.checked ? 'boden' : 'standard')
-                            }
-                          />
-                          Boden sanieren
-                        </label>
+                        {optionsHaken(gewaehlt, 'fenster-optionen')}
                         {gewaehltesErgebnis?.status === 'fertig' && gewaehltesErgebnis.blob && (
                           <>
                             <button
@@ -585,7 +611,7 @@ export default function App() {
                       <Vergleich
                         vorherUrl={gewaehlt.vorherUrl}
                         nachherUrl={gewaehltesErgebnis.url}
-                        zuruecksetzenBei={`${gewaehlt.id}-${gewaehlt.variante}`}
+                        zuruecksetzenBei={`${gewaehlt.id}-${gewaehlteKombi}`}
                       />
                     ) : gewaehltesErgebnis?.status === 'fehler' ? (
                       <p className="fenster-leer">
@@ -598,7 +624,7 @@ export default function App() {
                     ) : (
                       <p className="fenster-leer">
                         <span className="dreher dreher-dunkel" />
-                        {gewaehlt.variante === 'boden' ? 'Boden wird saniert …' : 'Wird saniert …'}
+                        {statustext(gewaehlt)}
                       </p>
                     )}
 
@@ -615,7 +641,6 @@ export default function App() {
                 )}
               </div>
             </div>
-
           </section>
         )}
       </main>

@@ -499,9 +499,22 @@ main {
   margin: 0;
 }
 
-.fenster-option {
-  font-size: 0.85rem;
+/* Die beiden Haekchen nebeneinander, an der Kachel und im Fenster */
+.kachel-optionen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.fenster-optionen {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 0 4px;
+}
+
+.fenster-optionen .kachel-option {
+  font-size: 0.85rem;
 }
 
 .dreher-dunkel {
