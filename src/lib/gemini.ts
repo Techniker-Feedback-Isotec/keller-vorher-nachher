@@ -11,13 +11,14 @@ const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODELL}:g
 
 /**
  * Der Arbeitsauftrag an das Modell. Grundlage ist Yanns Beispielpaar vom
- * 01.09.2026 (Waschkueche), am 04.09.2026 um seine Regeln fuer Boeden und
- * Waende ergaenzt: Fliesenboden behaelt seine Fliesen bis auf einen ca. 30 cm
- * breiten grauen Streifen entlang der Waende (dort ist die Abdichtung
- * sichtbar), einfarbiger Boden wird nur leicht aufgehellt; Waende werden
- * glatte weisse Flaechen ohne Steinmuster, Verkleidungen wie Rigips oder
- * Holzvertaefelung verschwinden. Absaetze und Ueberschriften im Text helfen
- * dem Modell, die Regeln je Bauteil auseinanderzuhalten.
+ * 01.09.2026 (Waschkueche), am 04./05.09.2026 nach seinen Tests geschaerft:
+ * Waende werden glatte weisse Flaechen ohne Steinmuster, Verkleidungen wie
+ * Rigips oder Holzvertaefelung verschwinden (das gefaellt ihm). Der Boden
+ * wird in seiner Substanz NIE veraendert, nur heller und sauberer (der
+ * fruehere 30-cm-Streifen ist gestrichen). Rohre, Leitungen und Heizkoerper
+ * bleiben ALLE erhalten, hoechstens gepflegter, weil das Modell am 05.09. ein
+ * Rohr entfernt hatte. Absaetze und Ueberschriften helfen dem Modell, die
+ * Regeln je Bauteil auseinanderzuhalten.
  */
 const PROMPT = [
   'Bearbeite dieses Foto eines Kellers.',
@@ -33,13 +34,16 @@ const PROMPT = [
   'Die Decke ist glatt verputzt und weiß gestrichen, ohne Flecken und Schäden.',
   '',
   'BODEN:',
-  'Wenn der Boden gefliest ist: Entlang aller Wände verläuft ein etwa 30 Zentimeter breiter Streifen, in dem die Fliesen entfernt sind und ein glatter, grauer Untergrund (Estrich) sichtbar ist. Die übrigen Fliesen bleiben exakt so, wie sie auf dem Foto sind, in Farbe, Muster und Zustand.',
-  'Wenn der Boden nicht gefliest, sondern einfarbig ist (Estrich, Beton, Anstrich): Helle den Boden leicht auf und verbessere ihn nur minimal, gleichmäßiger und sauberer, aber deutlich als derselbe Boden erkennbar.',
+  'Verändere den Boden niemals in seiner Bausubstanz. Fliesen, Fugen, Estrich, Beton, Platten, Muster, Farbe und Aufteilung bleiben exakt so, wie sie auf dem Foto sind. Nichts wird entfernt, ersetzt oder hinzugefügt.',
+  'Erlaubt ist nur: Der Boden wirkt sauberer, trockener und durch bessere Beleuchtung etwas heller. Schmutz, Staub, Pfützen und Flecken sind weg. Er muss sofort als derselbe Boden erkennbar sein.',
   '',
-  'GEGENSTÄNDE UND LEITUNGEN:',
+  'LEITUNGEN, ROHRE UND TECHNIK:',
+  'Alle vorhandenen Rohre, Wasserleitungen, Heizungsrohre, Kabel, Kabelkanäle, Lüftungsrohre, Heizkörper, Zähler, Verteilerkästen, Ventile und Anschlüsse bleiben vollständig erhalten, an derselben Stelle, in derselben Form und Führung.',
+  'Nichts davon darf entfernt, verkürzt, verlegt oder durch etwas anderes ersetzt werden. Erlaubt ist nur, dass sie gepflegt aussehen, etwa frisch gestrichen oder sauber, ohne Rost und Staub.',
+  '',
+  'GEGENSTÄNDE:',
   'Lose herumstehende Gegenstände wie Eimer, Flaschen, Kartons, Holzreste und Gerümpel sind weggeräumt.',
-  'Alte, auf der Wand oder unter der Decke verlegte Rohre und Kabel sind entfernt, sofern sie nicht zu einem Gerät im Raum gehören.',
-  'Fest installierte Dinge bleiben unverändert erhalten: Geräte wie Waschmaschinen und Heizungen samt Schläuchen, Wasseranschlüsse und Armaturen, Türen, Fenster, Treppen, Bodenabläufe, Lichtschalter und Steckdosen.',
+  'Fest installierte Dinge bleiben unverändert erhalten: Geräte wie Waschmaschinen, Trockner, Heizungen und Boiler samt Schläuchen, Wasseranschlüsse und Armaturen, Türen, Fenster, Treppen, Bodenabläufe, Lichtschalter, Steckdosen und Lampen.',
   '',
   'ALLGEMEIN:',
   'Behalte exakt dieselbe Kameraperspektive und Raumgeometrie bei.',
