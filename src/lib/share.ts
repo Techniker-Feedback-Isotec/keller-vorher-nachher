@@ -12,6 +12,24 @@ export function teilenMoeglich(): boolean {
   return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 }
 
+/**
+ * iPhone oder iPad. Dort landet ein Download in "Dateien" und ist aus einer
+ * installierten App heraus oft gar nicht moeglich; der richtige Weg ist das
+ * Teilen-Blatt. iPadOS meldet sich als Mac, verraet sich aber durch Touch.
+ */
+export function istIOS(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  if (/iPad|iPhone|iPod/.test(ua)) return true
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+}
+
+/** Eine beliebige Datei ueber das Teilen-Blatt anbieten; auf 'nicht moeglich' faellt der Aufrufer auf Download zurueck. */
+export async function teileDatei(blob: Blob, dateiname: string, titel: string): Promise<TeilenErgebnis> {
+  const file = new File([blob], dateiname, { type: blob.type })
+  return teileDateien([file], titel)
+}
+
 export type TeilenErgebnis = 'geteilt' | 'abgebrochen' | 'nicht moeglich'
 
 export async function teileDateien(files: File[], titel: string): Promise<TeilenErgebnis> {

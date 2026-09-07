@@ -340,8 +340,17 @@ main {
 
 .fenster-knoepfe {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  max-width: 100%;
+}
+
+/* Die Abschnittsüberschrift darf umbrechen, damit der PDF-Knopf auf dem Handy Platz hat */
+.card h2 {
+  flex-wrap: wrap;
 }
 
 .fenster-hinweis {
@@ -615,10 +624,19 @@ main {
   color: #8a5a00;
 }
 
+/* Auf dem Handy passt die Liste nicht unter den Knopf: als zentrierte Fläche
+   über die Seite legen, damit sie nie aus dem Bild ragt. */
 @media (max-width: 900px) {
   .bestand-liste {
-    left: 0;
-    right: auto;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 0;
+    max-width: none;
+    max-height: 70vh;
+    z-index: 50;
   }
 }
 
@@ -753,6 +771,65 @@ main {
   max-height: var(--vergleich-hoehe, calc(100vh - 150px));
   display: block;
   border-radius: 6px;
+}
+
+/* iOS rechnet 100vh mit eingeblendeter Adressleiste, dvh ist die sichtbare Höhe.
+   Sonst hängt der untere Bildrand auf dem iPhone hinter der Leiste. */
+@supports (height: 1dvh) {
+  .vergleich-bild {
+    max-height: var(--vergleich-hoehe, calc(100dvh - 150px));
+  }
+
+  .vergleich-fenster {
+    --vergleich-hoehe: 76dvh;
+  }
+
+  @media (max-width: 900px) {
+    .vergleich-fenster {
+      --vergleich-hoehe: 46dvh;
+    }
+
+    .vergleich-bild {
+      max-height: var(--vergleich-hoehe, calc(100dvh - 170px));
+    }
+  }
+}
+
+/* Touch-Geräte: größere Tippflächen für die kleinen Knöpfe und Häkchen */
+@media (pointer: coarse) {
+  .kachel-entfernen {
+    padding: 6px 9px;
+    font-size: 1rem;
+  }
+
+  .btn-klein {
+    padding: 8px 12px;
+    font-size: 0.88rem;
+  }
+
+  .kachel-option input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .kachel-option {
+    padding: 3px 0;
+  }
+
+  .bestand-liste .kachel-option {
+    padding: 5px 0;
+  }
+}
+
+/* Notch und Home-Indikator auf dem iPhone freihalten */
+.header-inner,
+main.container {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+
+.fusszeile {
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
 .vergleich-nachher {

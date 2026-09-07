@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import logo from './assets/isotec-logo.png'
 import Vergleich from './Vergleich'
 import Viewer, { type ViewerFoto } from './Viewer'
-import { ladeNachherHerunter, speichereDatei, teileNachherBild, teilenMoeglich } from './lib/share'
+import {
+  istIOS,
+  ladeNachherHerunter,
+  speichereDatei,
+  teileDatei,
+  teileNachherBild,
+  teilenMoeglich,
+} from './lib/share'
 import { bereiteBildVor, blobZuBase64 } from './lib/bild'
 import { GeminiFehler, erfasseBestand, saniereFoto } from './lib/gemini'
 import {
@@ -122,6 +129,14 @@ export default function App() {
   const [uploadHinweis, setUploadHinweis] = useState('')
   const [pdfLaeuft, setPdfLaeuft] = useState(false)
   const [pdfFehler, setPdfFehler] = useState('')
+  /**
+   * Auf iPhone und iPad wird die PDF erst erzeugt und dann ueber einen eigenen
+   * Knopf geteilt: Das Teilen-Blatt darf nur unmittelbar aus einem Tipp heraus
+   * starten, nach der Erzeugung waere die Berechtigung verbraucht (Lehre aus
+   * der Fotodoku). Aendert sich etwas an den Fotos, verfaellt die Datei.
+   */
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null)
+  const aufIOS = istIOS()
   const dateiFeld = useRef<HTMLInputElement>(null)
   const schluesselRef = useRef('')
   schluesselRef.current = schluessel
@@ -378,13 +393,26 @@ export default function App() {
       ])
       const logoPng = new Uint8Array(await logoAntwort.arrayBuffer())
       const pdf = await erzeugeSanierungsvorschauPdf(eintraege, logoPng)
-      speichereDatei(pdf, 'ISOTEC Sanierungsvorschau.pdf')
+      if (aufIOS) setPdfBlob(pdf)
+      else speichereDatei(pdf, 'ISOTEC Sanierungsvorschau.pdf')
     } catch (fehler) {
       setPdfFehler(fehler instanceof Error ? fehler.message : 'PDF konnte nicht erstellt werden.')
     } finally {
       setPdfLaeuft(false)
     }
   }
+
+  /** iPhone/iPad: die fertige PDF ueber das Teilen-Blatt weitergeben (Dateien, Mail, MeisterTask). */
+  async function teilePdf() {
+    if (!pdfBlob) return
+    const ergebnis = await teileDatei(pdfBlob, 'ISOTEC Sanierungsvorschau.pdf', 'ISOTEC Sanierungsvorschau')
+    if (ergebnis === 'nicht moeglich') speichereDatei(pdfBlob, 'ISOTEC Sanierungsvorschau.pdf')
+  }
+
+  // Sobald sich an den Fotos etwas aendert, passt die erzeugte PDF nicht mehr.
+  useEffect(() => {
+    setPdfBlob(null)
+  }, [fotos])
 
   async function kopiereVerteilLink() {
     try {
@@ -616,14 +644,20 @@ export default function App() {
           <section className="card">
             <h2>
               <span className="step">2</span>Vorher-Nachher
-              <button
-                className="btn btn-rot btn-klein h2-aktion"
-                disabled={pdfLaeuft || fertige.length === 0}
-                onClick={() => void erstellePdf()}
-                title="PDF mit allen fertigen Fotos in der jeweils gewählten Variante"
-              >
-                {pdfLaeuft ? 'PDF wird erstellt …' : `PDF erstellen (${fertige.length})`}
-              </button>
+              {aufIOS && pdfBlob ? (
+                <button className="btn btn-rot btn-klein h2-aktion" onClick={() => void teilePdf()}>
+                  PDF teilen
+                </button>
+              ) : (
+                <button
+                  className="btn btn-rot btn-klein h2-aktion"
+                  disabled={pdfLaeuft || fertige.length === 0}
+                  onClick={() => void erstellePdf()}
+                  title="PDF mit allen fertigen Fotos in der jeweils gewählten Variante"
+                >
+                  {pdfLaeuft ? 'PDF wird erstellt …' : `PDF erstellen (${fertige.length})`}
+                </button>
+              )}
             </h2>
             {pdfFehler && <p className="upload-hinweis">{pdfFehler}</p>}
             <div className="uebersicht">
@@ -731,15 +765,17 @@ export default function App() {
                         {bestandMenue(gewaehlt)}
                         {gewaehltesErgebnis?.status === 'fertig' && gewaehltesErgebnis.blob && (
                           <>
-                            <button
-                              className="btn btn-rand btn-klein"
-                              onClick={() => {
-                                ladeNachherHerunter(gewaehltesErgebnis.blob!, dateiname(gewaehlt))
-                                setGesichert(true)
-                              }}
-                            >
-                              {gesichert ? '✓ Heruntergeladen' : 'Herunterladen'}
-                            </button>
+                            {!aufIOS && (
+                              <button
+                                className="btn btn-rand btn-klein"
+                                onClick={() => {
+                                  ladeNachherHerunter(gewaehltesErgebnis.blob!, dateiname(gewaehlt))
+                                  setGesichert(true)
+                                }}
+                              >
+                                {gesichert ? '✓ Heruntergeladen' : 'Herunterladen'}
+                              </button>
+                            )}
                             {teilenMoeglich() && (
                               <button
                                 className="btn btn-rand btn-klein"

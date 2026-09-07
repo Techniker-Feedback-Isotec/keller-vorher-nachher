@@ -122,13 +122,13 @@ export async function erzeugeSanierungsvorschauPdf(
 
     // Infoblock: warmes Hellgrau mit roter Akzentkante, wie die Karten in der App
     const blockH = 104
-    const blockY = 150
+    const blockY = 268
     page.drawRectangle({ x: RAND, y: blockY, width: W - 2 * RAND, height: blockH, color: LIGHT })
     page.drawRectangle({ x: RAND, y: blockY, width: 4, height: blockH, color: RED })
     const zeilen: Array<[string, string]> = [
       ['Erstellt am', datum],
       ['Umfang', `${eintraege.length} ${eintraege.length === 1 ? 'Foto' : 'Fotos'} im Vergleich`],
-      ['Ausgeführt von', FIRMA],
+      ['Erstellt von', FIRMA],
     ]
     let zy = blockY + blockH - 30
     for (const [kopf, wert] of zeilen) {
@@ -136,6 +136,43 @@ export async function erzeugeSanierungsvorschauPdf(
       page.drawText(wert, { x: RAND + 130, y: zy, size: 11, font: bold, color: BROWN })
       zy -= 26
     }
+
+    // Wichtiger Hinweis (Yann, 07.09.2026): Der Kunde soll uns am Ende nicht an
+    // den Bildern messen. Deshalb deutlich, als eigener Kasten, in Sie-Form.
+    const hinweisY = 100
+    const hinweisH = 140
+    page.drawRectangle({
+      x: RAND,
+      y: hinweisY,
+      width: W - 2 * RAND,
+      height: hinweisH,
+      borderColor: RED,
+      borderWidth: 1.2,
+      color: WHITE,
+    })
+    page.drawText('Wichtiger Hinweis zu den Bildern', {
+      x: RAND + 18,
+      y: hinweisY + hinweisH - 26,
+      size: 11.5,
+      font: bold,
+      color: RED,
+    })
+    page.drawText(
+      'Die Nachher-Bilder in dieser Unterlage sind mit künstlicher Intelligenz erzeugte Visualisierungen. ' +
+        'Sie zeigen eine mögliche Sanierungsmaßnahme als unverbindliche Vorschau und stellen nicht das ' +
+        'tatsächliche oder zu bewertende Ergebnis dar. Farben, Oberflächen, Details und dargestellte ' +
+        'Einrichtung können vom ausgeführten Ergebnis abweichen. Maßgeblich für Umfang und Ausführung ' +
+        'der Sanierung sind ausschließlich das Angebot und die Auftragsbestätigung.',
+      {
+        x: RAND + 18,
+        y: hinweisY + hinweisH - 48,
+        size: 9.5,
+        font: regular,
+        color: BROWN,
+        maxWidth: W - 2 * RAND - 36,
+        lineHeight: 13.5,
+      },
+    )
 
     fusszeile(page, regular, HINWEIS, `Seite 1 von ${gesamt}`)
   }
